@@ -1,13 +1,30 @@
-symbol: "RELIANCE.NS"
+symbol: "BSE.NS"
 interval: "1d"
-start: "2020-01-01"
+start: "2022-01-01"
 end: null
 
+# Stocks the scanner checks every day
+watchlist:
+  - BSE.NS
+  - PASHUPATI.NS
+  - LAURUSLABS.NS
+  - MANKIND.NS
+  - LUPIN.NS
+  - DIXON.NS
+
 strategy:
-  name: "sma_crossover"   # placeholder until the real strategy is added
+  name: "dmi_macd"
   params:
-    fast: 20
-    slow: 50
+    di_length: 14
+    adx_smoothing: 14
+    adx_min: 0
+    adx_rising_bars: 1
+    macd_lookback: 5
+    zero_band_pct: 0.005
+    min_strength: 1        # 1 = normal+, 2 = strong+, 3 = super strong only
+    require_ema_trend: true
+    exit_ema: 20
+    allow_short: false
 
 backtest:
   initial_capital: 100000

@@ -2,7 +2,33 @@
 
 A modular Python framework for designing, backtesting and (eventually) live-trading systematic strategies.
 
-> Status: framework in place; the core strategy is being added. The SMA crossover in `strategies/` is a placeholder used to exercise the engine.
+## Strategy: DMI + MACD trend following
+
+| Role | Indicator | Long rule (shorts mirror it) |
+|---|---|---|
+| Main | DMI (14, 14) | +DI above −DI, and ADX rising |
+| Trigger and grade | MACD (12, 26, 9) | MACD line crosses above signal within the last 5 bars |
+| Trend filter | EMA 20 / EMA 50 | Close above both EMAs |
+| Exit | DMI / EMA 20 | −DI crosses above +DI, or close falls below EMA 20 |
+
+Each MACD crossover is graded by where it happens:
+
+- **Super strong**: above the zero line
+- **Strong**: near the zero line (within 0.5% of price)
+- **Normal**: below the zero line
+
+`min_strength` in the config picks the lowest grade to trade. Indicator values match TradingView's built-in DMI, MACD and Stochastic.
+
+Every threshold lives in [`config/config.yaml`](config/config.yaml).
+
+## Daily scanner
+
+```bash
+python scan.py                      # watchlist from config
+python scan.py BSE.NS LUPIN.NS      # or any symbols
+```
+
+Prints +DI, −DI, ADX, the MACD grade and today's action (BUY / EXIT / HOLD) for each stock.
 
 ## Features
 
@@ -18,6 +44,7 @@ A modular Python framework for designing, backtesting and (eventually) live-trad
 
 ```
 src/trading/
+  indicators.py DMI/ADX, MACD, EMA, Stochastic (TradingView-compatible)
   data/         market data loaders (Yahoo Finance, CSV)
   strategies/   Strategy base class + implementations
   backtest/     engine and performance metrics
@@ -46,7 +73,8 @@ pytest -q
 
 ## Roadmap
 
-- [ ] Core strategy implementation
+- [x] DMI + MACD strategy and daily scanner
+- [ ] Use Stochastic (14, 3, 3) as an entry filter
 - [ ] Walk-forward / out-of-sample validation
 - [ ] Equity curve and trade reports
 - [ ] Live broker adapter
