@@ -94,21 +94,23 @@ class DMIMACDStrategy(Strategy):
         return graded.ffill(limit=self.params["macd_lookback"] - 1).fillna(0).astype(int)
 
     def _positions(self, df: pd.DataFrame) -> pd.Series:
-        exit_ema = ema(df["close"], self.params["exit_ema"]) if self.params["exit_ema"] else None
+        di_bull = (df["plus_di"] > df["minus_di"]).to_numpy()
+        di_bear = (df["minus_di"] > df["plus_di"]).to_numpy()
+        if self.params["exit_ema"]:
+            exit_ema = ema(df["close"], self.params["exit_ema"])
+            below_ema = (df["close"] < exit_ema).to_numpy()
+            above_ema = (df["close"] > exit_ema).to_numpy()
+        else:
+            below_ema = above_ema = np.zeros(len(df), dtype=bool)
+        long_setup = df["long_setup"].to_numpy()
+        short_setup = df["short_setup"].to_numpy() & self.params["allow_short"]
+
         positions = np.zeros(len(df), dtype=int)
         pos = 0
         for i in range(len(df)):
-            row = df.iloc[i]
-            if pos == 1 and (row["minus_di"] > row["plus_di"]
-                             or (exit_ema is not None and row["close"] < exit_ema.iloc[i])):
-                pos = 0
-            elif pos == -1 and (row["plus_di"] > row["minus_di"]
-                                or (exit_ema is not None and row["close"] > exit_ema.iloc[i])):
+            if (pos == 1 and (di_bear[i] or below_ema[i])) or (pos == -1 and (di_bull[i] or above_ema[i])):
                 pos = 0
             if pos == 0:
-                if row["long_setup"]:
-                    pos = 1
-                elif row["short_setup"] and self.params["allow_short"]:
-                    pos = -1
+                pos = 1 if long_setup[i] else -1 if short_setup[i] else 0
             positions[i] = pos
         return pd.Series(positions, index=df.index)

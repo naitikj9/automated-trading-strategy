@@ -21,6 +21,33 @@ Each MACD crossover is graded by where it happens:
 
 Every threshold lives in [`config/config.yaml`](config/config.yaml).
 
+## Research: does it hold up on Nifty 50?
+
+[`research/nifty50_study.py`](research/nifty50_study.py) runs the strategy on 49 Nifty 50 stocks as an equal-weight portfolio, with costs included. The data is split in two:
+
+- **Train, 2018–2023:** 54 parameter combinations, covering ADX floor, minimum MACD grade, exit EMA and crossover lookback.
+- **Test, 2024–Oct 2026:** the best training settings run on years the search never saw.
+
+| Period | Model | CAGR | Sharpe | Max drawdown | Time in market |
+|---|---|---|---|---|---|
+| Train | Defaults | 5.2% | 1.20 | −7.9% | 25% |
+| Train | Tuned (exit EMA 50) | 7.0% | 1.37 | −8.4% | 30% |
+| Train | Buy & hold | 22.4% | 1.19 | −38.3% | 100% |
+| **Test** | Defaults | −0.3% | −0.08 | −5.9% | 23% |
+| **Test** | Tuned | 0.3% | 0.09 | −5.6% | 26% |
+| **Test** | Buy & hold | 8.9% | 0.68 | −17.6% | 100% |
+
+![Test period equity](docs/test_equity.png)
+
+**Findings**
+
+- From 2018 to 2023 the strategy matched buy-and-hold on risk-adjusted return, with a quarter of the drawdown.
+- That edge did not carry into 2024–2026, where it went roughly flat.
+- Tuning helped only a little, and slower exits (EMA 50) worked better than fast ones in both periods.
+- Large caps trend less cleanly than the midcap momentum names the rules were designed on, so the next step is a broader universe.
+
+Caveat: this uses today's Nifty 50 list, so earlier years carry survivorship bias.
+
 ## Daily scanner
 
 ```bash
@@ -75,7 +102,9 @@ pytest -q
 
 - [x] DMI + MACD strategy and daily scanner
 - [ ] Use Stochastic (14, 3, 3) as an entry filter
-- [ ] Walk-forward / out-of-sample validation
+- [x] Train/test validation on Nifty 50
+- [ ] Test on midcap / smallcap universe
+- [ ] Rolling walk-forward validation
 - [ ] Equity curve and trade reports
 - [ ] Live broker adapter
 - [ ] Scheduling and alerts
