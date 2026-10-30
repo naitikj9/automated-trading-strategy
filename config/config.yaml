@@ -1,0 +1,19 @@
+symbol: "RELIANCE.NS"
+interval: "1d"
+start: "2020-01-01"
+end: null
+
+strategy:
+  name: "sma_crossover"   # placeholder until the real strategy is added
+  params:
+    fast: 20
+    slow: 50
+
+backtest:
+  initial_capital: 100000
+  commission_pct: 0.0003
+  slippage_pct: 0.0005
+
+risk:
+  max_position_pct: 1.0
+  stop_loss_pct: 0.02
