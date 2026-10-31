@@ -76,6 +76,7 @@ class DMIMACDStrategy(Strategy):
         "poc_touch_pct": 0.03,     # "touching" POC means a low within 3% of it
         "breakout_memory": 30,     # the value-area breakout must be within this many bars
         "exit_on_di_cross": True,  # exit when -DI crosses above +DI
+        "exit_on_divergence": False,  # exit a long on a new bearish MACD divergence (shorts: bullish)
         "exit_ema": 50,        # exit when close crosses back through this EMA; None to disable
         "allow_short": False,    # NSE cash shorts are intraday only; enable for F&O
     }
@@ -271,6 +272,11 @@ class DMIMACDStrategy(Strategy):
             df["long_setup"] &= df["close"] > df["poc"]
             df["short_setup"] &= df["close"] < df["poc"]
 
+    @staticmethod
+    def _divergence_onset(labels: pd.Series) -> np.ndarray:
+        regular = labels.str.contains(r"(?<!hidden )(?:bullish|bearish) divergence", regex=True)
+        return (regular & (labels != labels.shift(1))).to_numpy()
+
     def _positions(self, df: pd.DataFrame) -> pd.Series:
         use_di = self.params["exit_on_di_cross"]
         di_bull = (df["plus_di"] > df["minus_di"]).to_numpy() & use_di
@@ -281,6 +287,11 @@ class DMIMACDStrategy(Strategy):
             above_ema = (df["close"] > exit_ema).to_numpy()
         else:
             below_ema = above_ema = np.zeros(len(df), dtype=bool)
+        # Exit on the bar a new regular divergence is confirmed (hidden divergences signal continuation).
+        bear_div = self._divergence_onset(df["bear_pattern"]) & self.params["exit_on_divergence"]
+        bull_div = self._divergence_onset(df["bull_pattern"]) & self.params["exit_on_divergence"]
+        below_ema = below_ema | bear_div
+        above_ema = above_ema | bull_div
         long_setup = df["long_setup"].to_numpy()
         short_setup = df["short_setup"].to_numpy() & self.params["allow_short"]
 

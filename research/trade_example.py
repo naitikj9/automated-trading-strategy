@@ -18,17 +18,32 @@ ROOT = Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from trading.data.loader import load_yfinance  # noqa: E402
-from trading.indicators import market_profile, volume_profile  # noqa: E402
+from trading.indicators import ema, market_profile, volume_profile  # noqa: E402
 from trading.strategies import get_strategy  # noqa: E402
 
 
-def exit_reason(row: pd.Series, side: int, exit_ema: float) -> str:
-    if side == 1:
-        return "-DI crossed above +DI" if row["minus_di"] > row["plus_di"] else f"close below EMA {exit_ema}"
-    return "+DI crossed above -DI" if row["plus_di"] > row["minus_di"] else f"close above EMA {exit_ema}"
+def exit_reason(row: pd.Series, side: int, params: dict) -> str:
+    """Name the exit rule that fired, in the same order the strategy checks them."""
+    n = params["exit_ema"]
+    reasons = []
+    if params["exit_on_di_cross"]:
+        if side == 1 and row["minus_di"] > row["plus_di"]:
+            reasons.append("-DI crossed above +DI")
+        if side == -1 and row["plus_di"] > row["minus_di"]:
+            reasons.append("+DI crossed above -DI")
+    if params.get("exit_on_divergence"):
+        label = row["bear_pattern"] if side == 1 else row["bull_pattern"]
+        if "divergence" in label and not label.startswith("hidden") and " + hidden" not in label:
+            reasons.append(f"{'bearish' if side == 1 else 'bullish'} MACD divergence")
+    if n:
+        if side == 1 and row["close"] < row["exit_ema"]:
+            reasons.append(f"close below EMA {n}")
+        if side == -1 and row["close"] > row["exit_ema"]:
+            reasons.append(f"close above EMA {n}")
+    return " + ".join(reasons) or "flipped to the other side"
 
 
-def trade_log(df: pd.DataFrame, exit_ema: int) -> pd.DataFrame:
+def trade_log(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     trades, open_trade = [], None
     pos = df["position"]
     for t, (prev, cur) in zip(df.index[1:], zip(pos.iloc[:-1], pos.iloc[1:])):
@@ -37,7 +52,7 @@ def trade_log(df: pd.DataFrame, exit_ema: int) -> pd.DataFrame:
             side = open_trade["side"]
             pnl = side * (row["close"] / open_trade["entry_price"] - 1)
             trades.append({**open_trade, "exit_date": t.date(), "exit_price": row["close"],
-                           "exit_reason": exit_reason(row, side, exit_ema), "return_%": 100 * pnl})
+                           "exit_reason": exit_reason(row, side, params), "return_%": 100 * pnl})
             open_trade = None
         if cur != 0 and cur != prev:
             open_trade = {"side": cur, "entry_date": t.date(), "entry_price": row["close"],
@@ -106,8 +121,11 @@ def main():
         params = yaml.safe_load(f)["strategy"]["params"]
     strategy = get_strategy("dmi_macd", **params)
     data = load_yfinance(args.symbol, "2024-01-01")  # extra history so indicators are warm
-    df = strategy.analyze(data).loc[args.start:]
-    trades = trade_log(df, strategy.params["exit_ema"])
+    df = strategy.analyze(data)
+    if strategy.params["exit_ema"]:
+        df["exit_ema"] = ema(df["close"], strategy.params["exit_ema"])
+    df = df.loc[args.start:]
+    trades = trade_log(df, strategy.params)
 
     pd.set_option("display.width", 250)
     print(trades.round(1).to_string(index=False))

@@ -191,6 +191,13 @@ def test_lower_price_low_with_higher_macd_low_is_divergence():
     assert labels[65] == "bullish divergence"
 
 
+def test_divergence_exit_fires_only_on_new_regular_divergence():
+    labels = pd.Series(["", "bearish divergence", "bearish divergence", "", "hidden bearish divergence",
+                        "double top + bearish divergence"])
+    onset = get_strategy("dmi_macd")._divergence_onset(labels)
+    assert onset.tolist() == [False, True, False, False, False, True]
+
+
 def test_min_strength_filters_weaker_crossovers():
     data = trend_data(0.01)
     loose = get_strategy("dmi_macd", min_strength=1).analyze(data)["long_setup"].sum()

@@ -23,7 +23,7 @@ strategy:
     macd_lookback: null    # null = MACD just has to be on the right side of its signal
     zero_band_pct: 0.005
     min_strength: 1        # 1 = normal+, 2 = strong+, 3 = super strong only
-    require_pattern: false # true = only trade after a MACD double dip / divergence
+    require_pattern: true  # only trade the main entry after a MACD double dip / divergence
     require_ema_trend: true
     di_cross_reentry: true # in an EMA uptrend, buy when +DI crosses back above -DI
     ema_reclaim_reentry: true # buy a close back above EMA 20 after a pullback that held EMA 50
@@ -31,7 +31,7 @@ strategy:
     short_reentry_needs_adx: true # every sell entry needs ADX rising and >= adx_min
     poc_filter: false      # longs only above the volume-profile POC, shorts only below
     poc_retest_entry: false # after a value-area breakout, buy a bounce off POC
-    exit_on_di_cross: true
+    exit_on_di_cross: false  # exit only when the close breaks EMA 50
     base_max_range: 0.25   # accumulation = 60 bars inside a range no wider than 25%
     accumulation_breakout: false # buy a high-volume close above an accumulation range
     skip_inside_base: false      # ignore re-entries while still inside the range

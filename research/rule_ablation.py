@@ -30,6 +30,7 @@ FLIPS = {
     "POC filter": {"poc_filter": True},
     "POC retest entry": {"poc_retest_entry": True},
     "exit on EMA 50 only (no DI exit)": {"exit_on_di_cross": False},
+    "exit on MACD divergence": {"exit_on_divergence": True},
     "allow shorts": {"allow_short": True},
 }
 
