@@ -4,69 +4,101 @@ A modular Python framework for designing, backtesting and (eventually) live-trad
 
 ## Strategy: DMI + MACD trend following
 
-| Role | Indicator | Long rule (shorts mirror it) |
-|---|---|---|
-| Main | DMI (14, 14) | +DI above −DI, and ADX rising |
-| Trigger and grade | MACD (12, 26, 9) | MACD line crosses above signal within the last 5 bars |
-| Trend filter | EMA 20 / EMA 50 | Close above both EMAs |
-| Exit | DMI / EMA 50 | −DI crosses above +DI, or close falls below EMA 50 (tuned; the original rule used EMA 20) |
+Daily candles. A signal forms at the close. One position at a time. ✅ on in [`config/config.yaml`](config/config.yaml), ⚪ in the code but off.
 
-Each MACD crossover is graded by where it happens:
+### Buy entry
+All four must hold:
 
-- **Super strong**: above the zero line
-- **Strong**: near the zero line (within 0.5% of price)
-- **Normal**: below the zero line
+1. ✅ **+DI above −DI** (DMI 14, 14 is the main indicator)
+2. ✅ **ADX at least 15 and rising**
+3. ✅ **MACD (12, 26, 9) above its signal line.** The last crossover is graded: above zero is super strong, near zero is strong, below zero is normal.
+4. ✅ **Close above EMA 20 and EMA 50**
 
-`min_strength` in the config picks the lowest grade to trade. Indicator values match TradingView's built-in DMI, MACD and Stochastic.
+Re-entries, which skip the ADX and MACD checks because the trend is already established:
 
-Every threshold lives in [`config/config.yaml`](config/config.yaml).
+5. ✅ **+DI cross:** in an uptrend, +DI crosses back above −DI
+6. ✅ **EMA 20 reclaim:** the pullback held EMA 50, and the close moves back above EMA 20
+7. ✅ **EMA 20 bounce:** the low comes within 2% of EMA 20, then the close tops the previous high
 
-## Research: does it hold up on Nifty 50?
+Optional:
 
-[`research/index_study.py`](research/index_study.py) runs the strategy on every stock in an NSE index as an equal-weight portfolio, with costs included. The data is split in two:
+8. ⚪ **Accumulation breakout:** 60 days inside a range no wider than 25%, then a close above it on 1.5× volume
+9. ⚪ **POC retest:** after breaking above the value area, price bounces off the volume POC
+10. ⚪ **POC filter:** buy only above POC
+11. ⚪ **MACD pattern required:** a double dip or divergence must be present
 
-- **Train, 2018–2023:** 54 parameter combinations, covering ADX floor, minimum MACD grade, exit EMA and crossover lookback.
-- **Test, 2024–Oct 2026:** the best training settings run on years the search never saw.
+### Sell entry (⚪ off, since positional shorts need futures)
+The buy rules mirrored. Every sell entry, re-entries included, needs **ADX at least 15 and rising**.
+
+### Exit
+- **Long:** −DI crosses above +DI, or the close falls below EMA 50
+- **Short:** +DI crosses above −DI, or the close rises above EMA 50
+
+### Shown in the scanner
+- MACD double dip / double top, regular and hidden divergence, confirmed without lookahead
+- Accumulation range ("in base") and breakouts
+- Volume profile: POC, value area, estimated buyer share
+- Market Profile (TPO) POC
+
+Indicator values match TradingView's built-in DMI, MACD and Stochastic.
+
+## Worked example: Laurus Labs, 2026
 
 ```bash
-python research/index_study.py --universe nifty50      # or midcap100, smallcap100
+python research/trade_example.py LAURUSLABS.NS --start 2026-01-01
 ```
 
-### Unseen test period (2024–Oct 2026)
+| Entry | Why | Exit | Why | Return |
+|---|---|---|---|---|
+| 14 Jan, ₹1,089 | +DI cross re-entry | 16 Jan, ₹1,076 | −DI back above | −1.3% |
+| 25 Feb, ₹1,075 | Trend entry | 6 Mar, ₹1,025 | −DI back above | −4.7% |
+| **15 Apr, ₹1,116** | **Trend entry: ADX 15.5 rising, +DI 30.7 vs −DI 17.1, MACD bullish** | **21 Oct, ₹2,012** | −DI back above | **+80.3%** |
+| 26 Oct, ₹2,059 | EMA 20 reclaim + bounce, EMA 50 held | open | | +16.8% |
 
-| Universe | Model | CAGR | Sharpe | Max drawdown | Time in market |
+![Laurus Labs trades](docs/example_lauruslabs.png)
+
+The pattern is typical of trend following: small losses while no trend forms, then one trade that rides the whole move. The same script on Nifty Pharma gives 8 trades and +9.3% ([chart](docs/example_cnxpharma.png)).
+
+## Research
+
+All studies run every stock in an NSE index as an equal-weight portfolio, with costs. Rules are judged on two periods:
+
+- **Train:** 2018–2023
+- **Test:** 2024–Oct 2026, unseen while the rules were built
+
+### Current rules vs buy and hold
+
+| Universe | Test CAGR | Test Sharpe | Test max DD | Buy & hold Sharpe | Buy & hold max DD |
 |---|---|---|---|---|---|
-| Nifty 50 | Defaults | −0.5% | −0.12 | −6.4% | 23% |
-| Nifty 50 | Tuned | −0.1% | −0.01 | −6.4% | 26% |
-| Nifty 50 | Buy & hold | 10.8% | 0.79 | −16.4% | 100% |
-| Midcap 100 | Defaults | 2.2% | 0.47 | −4.7% | 23% |
-| Midcap 100 | Tuned | 3.5% | 0.64 | −4.8% | 27% |
-| Midcap 100 | Buy & hold | 14.9% | 0.84 | −20.5% | 100% |
-| Smallcap 100 | Defaults | 4.7% | 0.89 | −5.7% | 25% |
-| Smallcap 100 | Tuned | 5.8% | 0.94 | −5.9% | 30% |
-| Smallcap 100 | Buy & hold | 25.4% | 1.16 | −23.8% | 100% |
+| Smallcap 100 | 8.7% | 1.01 | −8.2% | 1.16 | −23.8% |
+| Midcap 100 | 3.8% | 0.51 | −8.6% | 0.84 | −20.5% |
+| Nifty 50 | 0.5% | 0.11 | −8.4% | 0.79 | −16.4% |
 
-### Training period (2018–2023)
+The strategy works best on smallcaps and keeps drawdowns to roughly a third of buy-and-hold. It still trails buy-and-hold on the test years, partly because capital sits idle more than half the time.
 
-| Universe | Defaults Sharpe | Tuned Sharpe | Buy & hold Sharpe | Strategy max DD | Buy & hold max DD |
-|---|---|---|---|---|---|
-| Nifty 50 | 1.39 | 1.55 | 1.27 | −7.6% | −38.5% |
-| Midcap 100 | 1.47 | 1.54 | 1.19 | −7.4% | −40.0% |
-| Smallcap 100 | 1.77 | 1.85 | 1.12 | −9.6% | −60.6% |
+### Which rules earn their place?
 
-![Smallcap test equity](docs/test_equity_smallcap100.png)
+[`research/rule_ablation.py`](research/rule_ablation.py) flips one rule at a time. The table shows the change in **test-period Sharpe** against the current config.
 
-More charts: [Nifty 50](docs/test_equity_nifty50.png) · [Midcap 100](docs/test_equity_midcap100.png)
+| Change | Smallcap | Midcap | Nifty 50 | Verdict |
+|---|---|---|---|---|
+| Remove +DI cross re-entry | −0.12 | −0.16 | −0.16 | Keep it: the most valuable rule |
+| Exit on EMA 50 only (no DI exit) | +0.08 | +0.21 | +0.37 | Strongest improvement |
+| Require MACD pattern | +0.08 | +0.09 | +0.04 | Helps everywhere, and lowers drawdown |
+| ADX floor 15 → 0 | +0.03 | +0.07 | +0.04 | Small, consistent gain |
+| Skip re-entries inside a base | +0.03 | −0.02 | +0.08 | Mixed |
+| POC filter | −0.03 | +0.10 | −0.01 | Mixed |
+| POC retest entry | +0.03 | 0.00 | 0.00 | No clear effect |
+| Accumulation breakout entry | 0.00 | −0.01 | 0.00 | No clear effect |
+| Remove EMA 20 reclaim / bounce | ~0 | ~0 | ~0 | Overlaps the +DI cross |
+| Allow shorts | −1.10 | −0.73 | −0.83 | Keep shorts off |
 
-**Findings**
+```bash
+python research/rule_ablation.py --universe smallcap100   # or midcap100, nifty50
+python research/index_study.py --universe smallcap100     # parameter grid search
+```
 
-- **The smaller the stocks, the better it works.** On unseen data, Sharpe goes from 0 on Nifty 50, to 0.6 on midcaps, to 0.9 on smallcaps. Momentum names trend more cleanly, which matches the charts the rules came from.
-- **It cuts risk sharply.** Worst drawdown stayed under 6% in every test, against 16–24% for buy-and-hold.
-- **It does not beat buy-and-hold.** Raw return is far lower, because capital sits idle about 75% of the time, and even risk-adjusted it trails in 2024–2026.
-- **The training edge shrank on new data.** In 2018–2023 it beat buy-and-hold on Sharpe in every universe. In 2024–2026 it fell behind, so part of that early edge was period-specific.
-- **Tuning is stable.** The search kept choosing the same things on every universe: no ADX floor, accept all MACD grades, slower exits (EMA 50 or a DI cross only). Each of those gave a small, consistent gain.
-
-Caveat: these are today's index members, so earlier years carry survivorship bias.
+Caveat: these are today's index members, so earlier years carry survivorship bias. Daily bars approximate the volume and market profiles; TradingView uses intraday data.
 
 ## Daily scanner
 
@@ -75,7 +107,7 @@ python scan.py                      # watchlist from config
 python scan.py BSE.NS LUPIN.NS      # or any symbols
 ```
 
-Prints +DI, −DI, ADX, the MACD grade and today's action (BUY / EXIT / HOLD) for each stock.
+Prints +DI, −DI, ADX, POC, buyer share, the MACD grade, patterns and today's action (BUY / EXIT / HOLD) for each stock.
 
 ## Features
 
@@ -91,15 +123,16 @@ Prints +DI, −DI, ADX, the MACD grade and today's action (BUY / EXIT / HOLD) fo
 
 ```
 src/trading/
-  indicators.py DMI/ADX, MACD, EMA, Stochastic (TradingView-compatible)
+  indicators.py DMI/ADX, MACD, EMA, Stochastic, volume and market profile
   data/         market data loaders (Yahoo Finance, CSV)
   strategies/   Strategy base class + implementations
   backtest/     engine and performance metrics
   risk/         position sizing, stops
   broker/       broker interface, paper broker
 config/         run configuration
+research/       index studies, rule ablation, worked trade example
+docs/           charts
 tests/          unit tests
-notebooks/      research
 ```
 
 ## Quick start
@@ -124,7 +157,7 @@ pytest -q
 - [ ] Use Stochastic (14, 3, 3) as an entry filter
 - [x] Train/test validation on Nifty 50, Midcap 100, Smallcap 100
 - [ ] Rolling walk-forward validation
-- [ ] Equity curve and trade reports
+- [x] Per-trade reports with entry and exit reasons
 - [ ] Live broker adapter
 - [ ] Scheduling and alerts
 
