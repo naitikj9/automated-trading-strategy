@@ -18,11 +18,10 @@ from index_study import TEST, TRAIN, UNIVERSES, evaluate, load_universe  # noqa:
 
 VARIANTS = {
     "config as is": {},
-    "+ EMA 20/50 cross entry": {"ema_cross_entry": True},
-    "+ EMA 20/50 cross exit": {"ema_cross_exit": True},
-    "+ EMA 20/50 cross entry and exit": {"ema_cross_entry": True, "ema_cross_exit": True},
-    "shorts on, pattern on sells": {"allow_short": True},
-    "shorts on, no pattern on sells": {"allow_short": True, "require_pattern_short": False},
+    "A: re-entries need +DI > -DI": {"reentry_needs_di": True},
+    "B: entry 2% above EMA 50": {"entry_ema_buffer": 0.02},
+    "B: entry 1% above EMA 50": {"entry_ema_buffer": 0.01},
+    "A + B (2%)": {"reentry_needs_di": True, "entry_ema_buffer": 0.02},
 }
 
 

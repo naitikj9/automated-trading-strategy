@@ -72,32 +72,37 @@ All studies run every stock in an NSE index as an equal-weight portfolio, with c
 
 | Universe | Test CAGR | Test Sharpe | Test max DD | Buy & hold Sharpe | Buy & hold max DD |
 |---|---|---|---|---|---|
-| Smallcap 100 | 8.7% | 1.01 | −8.2% | 1.16 | −23.8% |
-| Midcap 100 | 3.8% | 0.51 | −8.6% | 0.84 | −20.5% |
-| Nifty 50 | 0.5% | 0.11 | −8.4% | 0.79 | −16.4% |
+| Smallcap 100 | 10.0% | 1.17 | −7.7% | 1.16 | −23.8% |
+| Midcap 100 | 6.3% | 0.78 | −6.9% | 0.84 | −20.5% |
+| Nifty 50 | 3.3% | 0.53 | −7.8% | 0.79 | −16.4% |
 
-The strategy works best on smallcaps and keeps drawdowns to roughly a third of buy-and-hold. It still trails buy-and-hold on the test years, partly because capital sits idle more than half the time.
+On smallcaps the strategy matches buy-and-hold on risk-adjusted return with a third of the drawdown. Raw return is lower everywhere, because capital sits idle more than half the time.
+
+Across all trades since 2018, 27–33% of trades win. Winners average +15% to +27% and last about 58 days. Losers average −3% to −5% and last about 9 days.
 
 ### Which rules earn their place?
 
-[`research/rule_ablation.py`](research/rule_ablation.py) flips one rule at a time. The table shows the change in **test-period Sharpe** against the current config.
+[`research/rule_ablation.py`](research/rule_ablation.py) flips one rule at a time against the current config. The table shows the change in **test-period Sharpe**; positive means the change helped.
 
-| Change | Smallcap | Midcap | Nifty 50 | Verdict |
+| Change from the current config | Smallcap | Midcap | Nifty 50 | Verdict |
 |---|---|---|---|---|
-| Remove +DI cross re-entry | −0.12 | −0.16 | −0.16 | Keep it: the most valuable rule |
-| Exit on EMA 50 only (no DI exit) | +0.08 | +0.21 | +0.37 | Strongest improvement |
-| Require MACD pattern | +0.08 | +0.09 | +0.04 | Helps everywhere, and lowers drawdown |
-| ADX floor 15 → 0 | +0.03 | +0.07 | +0.04 | Small, consistent gain |
-| Skip re-entries inside a base | +0.03 | −0.02 | +0.08 | Mixed |
-| POC filter | −0.03 | +0.10 | −0.01 | Mixed |
-| POC retest entry | +0.03 | 0.00 | 0.00 | No clear effect |
-| Accumulation breakout entry | 0.00 | −0.01 | 0.00 | No clear effect |
-| Remove EMA 20 reclaim / bounce | ~0 | ~0 | ~0 | Overlaps the +DI cross |
+| Remove +DI cross re-entry | −0.13 | −0.19 | +0.07 | Keep: carries small and midcaps |
+| Remove EMA 20 bounce entry | −0.01 | −0.06 | −0.05 | Keep |
+| Remove EMA 20 reclaim re-entry | 0.00 | −0.01 | +0.01 | Neutral; it overlaps the +DI cross |
+| ADX floor 15 → 0 | +0.04 | +0.04 | 0.00 | Small gain; the floor stays as a design choice |
+| Skip re-entries inside a base | +0.03 | −0.01 | +0.11 | Mixed |
+| POC filter | −0.09 | +0.09 | +0.01 | Mixed |
+| POC retest entry | +0.05 | +0.01 | +0.01 | Small gain, mainly smallcaps |
+| Accumulation breakout entry | −0.02 | +0.01 | −0.05 | Off |
 | Exit on new bearish MACD divergence | −0.06 | −0.08 | −0.08 | Off: exits too early in strong trends |
 | Buy on EMA 20/50 golden cross | −0.15 | +0.05 | −0.01 | Off: mixed, and drawdown rose everywhere |
 | Exit on EMA 20/50 death cross | 0.00 | 0.00 | 0.00 | No effect: the EMA 50 exit always fires first |
-| Shorts without the MACD pattern | −0.35 | −0.20 | −0.20 | Worse than shorts with it (vs shorts on) |
-| Allow shorts | −1.10 | −0.73 | −0.83 | Keep shorts off |
+| Re-entries also need +DI > −DI | 0.00 | 0.00 | 0.00 | Neutral; removes 17 smallcap entries that went against DMI |
+| Long entry at least 2% above EMA 50 | +0.05 | +0.07 | +0.03 | Helps everywhere; cuts one-day whipsaw trades |
+| Allow shorts | −0.84 | −0.58 | −0.58 | Keep shorts off |
+| Shorts without the MACD pattern (vs shorts with it) | −0.35 | −0.20 | −0.20 | If shorts are used, keep the pattern |
+
+The two switches already on were measured against the config before them: requiring a MACD pattern added +0.08 / +0.09 / +0.04, and exiting on EMA 50 alone added +0.08 / +0.21 / +0.37.
 
 ### 1-hour re-entries
 
@@ -111,9 +116,17 @@ The strategy works best on smallcaps and keeps drawdowns to roughly a third of b
 
 Hourly re-entries helped on every index. The EMA 20/50 cross gave the best Sharpe with the smallest rise in drawdown, so it is the one switched on. With only two years of hourly data there is no separate unseen period, so treat this gain as provisional.
 
+### Audit
+
+[`research/audit.py`](research/audit.py) checks the live config for two things:
+
+- **Lookahead:** reruns the strategy on history cut at six dates, with every optional rule on, and confirms no earlier signal changes. None did.
+- **Contradictions:** across 3,031 smallcap entries, none entered below EMA 50. 17 (0.6%) entered while −DI was above +DI, all through the EMA 20 reclaim/bounce re-entries. 255 (8.4%) lasted one bar; those entered a median 1.4% above EMA 50, against 4.5% for the rest.
+
 ```bash
 python research/rule_ablation.py --universe smallcap100   # or midcap100, nifty50
 python research/hourly_reentry_study.py --universe smallcap100
+python research/audit.py --universe smallcap100
 python research/index_study.py --universe smallcap100     # parameter grid search
 ```
 

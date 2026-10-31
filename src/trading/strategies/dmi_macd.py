@@ -77,6 +77,8 @@ class DMIMACDStrategy(Strategy):
         "poc_touch_pct": 0.03,     # "touching" POC means a low within 3% of it
         "breakout_memory": 30,     # the value-area breakout must be within this many bars
         "exit_on_di_cross": True,  # exit when -DI crosses above +DI
+        "reentry_needs_di": False,  # EMA 20 reclaim / bounce re-entries also need +DI above -DI
+        "entry_ema_buffer": 0.0,   # long entries need the close this far above EMA 50 (0.02 = 2%)
         "ema_cross_entry": False,  # buy when EMA 20 crosses above EMA 50 (golden cross); shorts: below
         "ema_cross_exit": False,   # exit a long when EMA 20 crosses below EMA 50 (death cross); shorts: above
         "exit_on_divergence": False,  # exit a long on a new bearish MACD divergence (shorts: bullish)
@@ -142,6 +144,10 @@ class DMIMACDStrategy(Strategy):
         reclaim_down = (df["close"] < df["ema_fast"]) & (prev_close >= prev_fast) & held_below_slow \
             & (df["ema_fast"] < df["ema_slow"])
 
+        if p["reentry_needs_di"]:
+            reclaim_up &= df["plus_di"] > df["minus_di"]
+            reclaim_down &= df["minus_di"] > df["plus_di"]
+
         # Pullback rejection: price comes back to EMA 20, fails there, and breaks the previous bar.
         touch, m = p["ema_touch_pct"], p["touch_bars"]
         dipped_to_fast = (df["low"] <= df["ema_fast"] * (1 + touch)).rolling(m).max().astype(bool)
@@ -150,6 +156,9 @@ class DMIMACDStrategy(Strategy):
             & held_above_slow & (df["ema_fast"] > df["ema_slow"])
         reject_down = rallied_to_fast & (df["close"] < df["low"].shift(1)) & (df["close"] < df["ema_fast"]) \
             & held_below_slow & (df["ema_fast"] < df["ema_slow"])
+        if p["reentry_needs_di"]:
+            bounce_up &= df["plus_di"] > df["minus_di"]
+            reject_down &= df["minus_di"] > df["plus_di"]
 
         df["long_reentry"] = (di_cross_up & up_trend & p["di_cross_reentry"]) \
             | (reclaim_up & p["ema_reclaim_reentry"]) | (bounce_up & p["ema_pullback_entry"])
@@ -186,6 +195,9 @@ class DMIMACDStrategy(Strategy):
             self._poc_rules(df)
             if p["poc_retest_entry"]:
                 triggers["POC retest"] = (df["poc_retest_up"], df["poc_retest_down"])
+        if p["entry_ema_buffer"]:
+            df["long_setup"] &= df["close"] > df["ema_slow"] * (1 + p["entry_ema_buffer"])
+            df["short_setup"] &= df["close"] < df["ema_slow"] * (1 - p["entry_ema_buffer"])
         df["long_reason"] = self._reasons(df["long_setup"], {k: v[0] for k, v in triggers.items()})
         df["short_reason"] = self._reasons(df["short_setup"], {k: v[1] for k, v in triggers.items()})
         df["position"] = self._positions(df)
