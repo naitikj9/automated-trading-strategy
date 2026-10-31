@@ -1,12 +1,15 @@
-"""Tune the DMI + MACD strategy on Nifty 50 stocks, then test it on years it never saw.
+"""Tune the DMI + MACD strategy on an NSE index, then test it on years it never saw.
 
 Train: 2018-2023 (parameter grid search)
 Test:  2024 onwards (best train settings vs defaults vs buy-and-hold)
 
 Each stock gets an equal share of capital; idle capital earns nothing.
+
+    python research/index_study.py --universe midcap100
 """
 from __future__ import annotations
 
+import argparse
 import itertools
 import sys
 from pathlib import Path
@@ -22,12 +25,13 @@ from trading.backtest.metrics import max_drawdown, sharpe  # noqa: E402
 from trading.data.loader import load_yfinance  # noqa: E402
 from trading.strategies import DMIMACDStrategy  # noqa: E402
 
-# Current constituents, so older years carry survivorship bias.
-NIFTY50 = """ADANIENT ADANIPORTS APOLLOHOSP ASIANPAINT AXISBANK BAJAJ-AUTO BAJFINANCE BAJAJFINSV BEL
-BHARTIARTL CIPLA COALINDIA DRREDDY EICHERMOT ETERNAL GRASIM HCLTECH HDFCBANK HDFCLIFE HEROMOTOCO
-HINDALCO HINDUNILVR ICICIBANK INDUSINDBK INFY ITC JIOFIN JSWSTEEL KOTAKBANK LT M&M MARUTI
-NESTLEIND NTPC ONGC POWERGRID RELIANCE SBILIFE SBIN SHRIRAMFIN SUNPHARMA TATACONSUM TATAMOTORS
-TATASTEEL TCS TECHM TITAN TRENT ULTRACEMCO WIPRO""".split()
+# Constituent lists published by NSE. They are today's members, so older years carry survivorship bias.
+UNIVERSES = {
+    "nifty50": "ind_nifty50list",
+    "midcap100": "ind_niftymidcap100list",
+    "smallcap100": "ind_niftysmallcap100list",
+}
+NSE_LIST_URL = "https://archives.nseindia.com/content/indices/{}.csv"
 
 DATA_START = "2017-01-01"  # one warm-up year before training starts
 TRAIN = ("2018-01-01", "2023-12-31")
@@ -42,13 +46,23 @@ GRID = {
 }
 
 CACHE = ROOT / "data" / "cache"
-RESULTS = ROOT / "results"
 
 
-def load_universe() -> dict[str, pd.DataFrame]:
+def constituents(universe: str) -> list[str]:
+    path = CACHE / f"{UNIVERSES[universe]}.csv"
+    if not path.exists():
+        import urllib.request
+
+        CACHE.mkdir(parents=True, exist_ok=True)
+        request = urllib.request.Request(NSE_LIST_URL.format(UNIVERSES[universe]), headers={"User-Agent": "Mozilla/5.0"})
+        path.write_bytes(urllib.request.urlopen(request, timeout=30).read())
+    return pd.read_csv(path)["Symbol"].tolist()
+
+
+def load_universe(universe: str) -> dict[str, pd.DataFrame]:
     CACHE.mkdir(parents=True, exist_ok=True)
-    universe = {}
-    for name in NIFTY50:
+    loaded = {}
+    for name in constituents(universe):
         path = CACHE / f"{name}.csv"
         if path.exists():
             data = pd.read_csv(path, index_col=0, parse_dates=True)
@@ -60,8 +74,8 @@ def load_universe() -> dict[str, pd.DataFrame]:
                 continue
             data.to_csv(path)
         if len(data) > 250:
-            universe[name] = data
-    return universe
+            loaded[name] = data
+    return loaded
 
 
 def portfolio_stats(daily: pd.DataFrame) -> dict:
@@ -98,16 +112,21 @@ def evaluate(universe, params, window) -> dict:
 
 
 def main():
-    universe = load_universe()
-    print(f"{len(universe)} stocks loaded\n")
-    RESULTS.mkdir(exist_ok=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--universe", choices=UNIVERSES, default="nifty50")
+    name = parser.parse_args().universe
+
+    universe = load_universe(name)
+    print(f"{name}: {len(universe)} stocks loaded\n")
+    results = ROOT / "results" / name
+    results.mkdir(parents=True, exist_ok=True)
 
     rows = []
     for values in itertools.product(*GRID.values()):
         params = dict(zip(GRID, values))
         rows.append({**params, **evaluate(universe, params, TRAIN)})
     grid = pd.DataFrame(rows).sort_values("sharpe", ascending=False)
-    grid.to_csv(RESULTS / "grid_train.csv", index=False)
+    grid.to_csv(results / "grid_train.csv", index=False)
     print("Top 10 settings on TRAIN (2018-2023), by Sharpe:")
     print(grid.head(10).round(3).to_string(index=False))
 
@@ -117,33 +136,33 @@ def main():
 
     summary = []
     for label, window in (("train", TRAIN), ("test", TEST)):
-        for name, params in candidates.items():
-            summary.append({"period": label, "model": name, **evaluate(universe, params, window)})
+        for model, params in candidates.items():
+            summary.append({"period": label, "model": model, **evaluate(universe, params, window)})
         summary.append({"period": label, "model": "buy & hold", **portfolio_stats(buy_hold_returns(universe, window)),
                         "time_in_market": 1.0, "beats_bh_pct": np.nan})
     summary = pd.DataFrame(summary)
-    summary.to_csv(RESULTS / "summary.csv", index=False)
+    summary.to_csv(results / "summary.csv", index=False)
     print(f"\nTuned settings: {best}\n")
     print(summary.round(3).to_string(index=False))
 
-    plot_test_equity(universe, candidates)
+    plot_test_equity(universe, candidates, name)
 
 
-def plot_test_equity(universe, candidates):
+def plot_test_equity(universe, candidates, name):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    curves = {name: strategy_returns(universe, params, TEST)[0] for name, params in candidates.items()}
+    curves = {model: strategy_returns(universe, params, TEST)[0] for model, params in candidates.items()}
     curves["buy & hold"] = buy_hold_returns(universe, TEST)
-    for name, rets in curves.items():
-        ax.plot((1 + rets.mean(axis=1, skipna=True).fillna(0)).cumprod(), label=name)
-    ax.set_title("Nifty 50 equal-weight portfolio, unseen test period (2024 onwards)")
+    for model, rets in curves.items():
+        ax.plot((1 + rets.mean(axis=1, skipna=True).fillna(0)).cumprod(), label=model)
+    ax.set_title(f"{name} equal-weight portfolio, unseen test period (2024 onwards)")
     ax.set_ylabel("Growth of 1")
     ax.grid(alpha=0.3)
     ax.legend()
-    out = ROOT / "docs" / "test_equity.png"
+    out = ROOT / "docs" / f"test_equity_{name}.png"
     out.parent.mkdir(exist_ok=True)
     fig.savefig(out, dpi=120, bbox_inches="tight")
     print(f"\nChart saved to {out.relative_to(ROOT)}")
