@@ -23,6 +23,7 @@ Re-entries, which skip the ADX and MACD checks because the trend is already esta
 
 Optional:
 
+8a. ⚪ **EMA 20/50 golden cross:** buy when EMA 20 crosses above EMA 50 (`ema_cross_entry`)
 9. ⚪ **Accumulation breakout:** 60 days inside a range no wider than 25%, then a close above it on 1.5× volume
 10. ⚪ **POC retest:** after breaking above the value area, price bounces off the volume POC
 11. ⚪ **POC filter:** buy only above POC
@@ -93,6 +94,9 @@ The strategy works best on smallcaps and keeps drawdowns to roughly a third of b
 | Accumulation breakout entry | 0.00 | −0.01 | 0.00 | No clear effect |
 | Remove EMA 20 reclaim / bounce | ~0 | ~0 | ~0 | Overlaps the +DI cross |
 | Exit on new bearish MACD divergence | −0.06 | −0.08 | −0.08 | Off: exits too early in strong trends |
+| Buy on EMA 20/50 golden cross | −0.15 | +0.05 | −0.01 | Off: mixed, and drawdown rose everywhere |
+| Exit on EMA 20/50 death cross | 0.00 | 0.00 | 0.00 | No effect: the EMA 50 exit always fires first |
+| Shorts without the MACD pattern | −0.35 | −0.20 | −0.20 | Worse than shorts with it (vs shorts on) |
 | Allow shorts | −1.10 | −0.73 | −0.83 | Keep shorts off |
 
 ### 1-hour re-entries

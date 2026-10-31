@@ -54,6 +54,7 @@ class DMIMACDStrategy(Strategy):
         "dip_tolerance": 0.15,   # second dip at least 85% as deep as the first
         "pattern_valid_bars": 20,
         "require_pattern": False,
+        "require_pattern_short": None,  # None: same as require_pattern; True/False: override for sells
         "ema_fast": 20,
         "ema_slow": 50,
         "require_ema_trend": True,
@@ -76,6 +77,8 @@ class DMIMACDStrategy(Strategy):
         "poc_touch_pct": 0.03,     # "touching" POC means a low within 3% of it
         "breakout_memory": 30,     # the value-area breakout must be within this many bars
         "exit_on_di_cross": True,  # exit when -DI crosses above +DI
+        "ema_cross_entry": False,  # buy when EMA 20 crosses above EMA 50 (golden cross); shorts: below
+        "ema_cross_exit": False,   # exit a long when EMA 20 crosses below EMA 50 (death cross); shorts: above
         "exit_on_divergence": False,  # exit a long on a new bearish MACD divergence (shorts: bullish)
         "exit_ema": 50,        # exit when close crosses back through this EMA; None to disable
         "allow_short": False,    # NSE cash shorts are intraday only; enable for F&O
@@ -120,6 +123,7 @@ class DMIMACDStrategy(Strategy):
             & (df["bear_strength"] >= p["min_strength"])
         if p["require_pattern"]:
             df["long_setup"] &= df["bull_pattern"] != ""
+        if p["require_pattern"] if p["require_pattern_short"] is None else p["require_pattern_short"]:
             df["short_setup"] &= df["bear_pattern"] != ""
         triggers = {"trend: DI + ADX + MACD + EMA": (df["long_setup"].copy(), df["short_setup"].copy())}
 
@@ -167,6 +171,13 @@ class DMIMACDStrategy(Strategy):
             triggers["EMA 20 pullback rejected"] = (bounce_up & allowed_long, reject_down & allowed_short)
         df["long_setup"] |= df["long_reentry"]
         df["short_setup"] |= df["short_reentry"]
+        fast_above = df["ema_fast"] > df["ema_slow"]
+        df["golden_cross"] = fast_above & ~fast_above.shift(1, fill_value=True)
+        df["death_cross"] = ~fast_above & fast_above.shift(1, fill_value=False)
+        if p["ema_cross_entry"]:
+            df["long_setup"] |= df["golden_cross"]
+            df["short_setup"] |= df["death_cross"] & (adx_rising if p["short_reentry_needs_adx"] else True)
+            triggers["EMA 20/50 golden cross"] = (df["golden_cross"], df["death_cross"])
         if p["accumulation_breakout"]:
             df["long_setup"] |= df["base_breakout"]
             df["short_setup"] |= df["base_breakdown"]
@@ -292,6 +303,9 @@ class DMIMACDStrategy(Strategy):
         bull_div = self._divergence_onset(df["bull_pattern"]) & self.params["exit_on_divergence"]
         below_ema = below_ema | bear_div
         above_ema = above_ema | bull_div
+        if self.params["ema_cross_exit"]:
+            below_ema = below_ema | df["death_cross"].to_numpy()
+            above_ema = above_ema | df["golden_cross"].to_numpy()
         long_setup = df["long_setup"].to_numpy()
         short_setup = df["short_setup"].to_numpy() & self.params["allow_short"]
 
