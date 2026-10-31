@@ -29,6 +29,8 @@ strategy:
     ema_reclaim_reentry: true # buy a close back above EMA 20 after a pullback that held EMA 50
     ema_pullback_entry: true  # enter when a pullback to within 2% of EMA 20 is rejected
     short_reentry_needs_adx: true # every sell entry needs ADX rising and >= adx_min
+    reentry_needs_di: true    # EMA 20 reclaim/bounce re-entries also need +DI > -DI (audit fix A)
+    entry_ema_buffer: 0.02    # every entry needs the close 2% above EMA 50, cuts 1-day whipsaws (audit fix B)
     poc_filter: false      # longs only above the volume-profile POC, shorts only below
     poc_retest_entry: false # after a value-area breakout, buy a bounce off POC
     exit_on_di_cross: false  # exit only when the close breaks EMA 50

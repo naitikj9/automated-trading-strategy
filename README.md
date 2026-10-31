@@ -12,13 +12,13 @@ All four must hold, plus a MACD pattern (rule 12):
 1. ✅ **+DI above −DI** (DMI 14, 14 is the main indicator)
 2. ✅ **ADX at least 15 and rising**
 3. ✅ **MACD (12, 26, 9) above its signal line.** The last crossover is graded: above zero is super strong, near zero is strong, below zero is normal.
-4. ✅ **Close above EMA 20 and EMA 50**
+4. ✅ **Close above EMA 20, and at least 2% above EMA 50** (the 2% buffer applies to every entry, so a trade does not open right on the exit line)
 
 Re-entries, which skip the ADX and MACD checks because the trend is already established:
 
 5. ✅ **+DI cross:** in an uptrend, +DI crosses back above −DI
-6. ✅ **EMA 20 reclaim:** the pullback held EMA 50, and the close moves back above EMA 20
-7. ✅ **EMA 20 bounce:** the low comes within 2% of EMA 20, then the close tops the previous high
+6. ✅ **EMA 20 reclaim:** the pullback held EMA 50, and the close moves back above EMA 20, with +DI above −DI
+7. ✅ **EMA 20 bounce:** the low comes within 2% of EMA 20, then the close tops the previous high, with +DI above −DI
 8. ✅ **1-hour EMA cross:** while flat and the daily trend is intact, the 1-hour EMA 20 crosses above EMA 50 (enters during the day, not at the close)
 
 Optional:
@@ -72,17 +72,17 @@ All studies run every stock in an NSE index as an equal-weight portfolio, with c
 
 | Universe | Test CAGR | Test Sharpe | Test max DD | Buy & hold Sharpe | Buy & hold max DD |
 |---|---|---|---|---|---|
-| Smallcap 100 | 10.0% | 1.17 | −7.7% | 1.16 | −23.8% |
-| Midcap 100 | 6.3% | 0.78 | −6.9% | 0.84 | −20.5% |
-| Nifty 50 | 3.3% | 0.53 | −7.8% | 0.79 | −16.4% |
+| Smallcap 100 | 10.2% | 1.22 | −7.7% | 1.16 | −23.8% |
+| Midcap 100 | 6.7% | 0.85 | −6.4% | 0.84 | −20.5% |
+| Nifty 50 | 3.3% | 0.55 | −7.5% | 0.79 | −16.4% |
 
-On smallcaps the strategy matches buy-and-hold on risk-adjusted return with a third of the drawdown. Raw return is lower everywhere, because capital sits idle more than half the time.
+On small and midcaps the strategy matches or beats buy-and-hold on risk-adjusted return with a third of the drawdown. Raw return is lower everywhere, because capital sits idle more than half the time.
 
 Across all trades since 2018, 27–33% of trades win. Winners average +15% to +27% and last about 58 days. Losers average −3% to −5% and last about 9 days.
 
 ### Which rules earn their place?
 
-[`research/rule_ablation.py`](research/rule_ablation.py) flips one rule at a time against the current config. The table shows the change in **test-period Sharpe**; positive means the change helped.
+[`research/rule_ablation.py`](research/rule_ablation.py) flips one rule at a time against the config as it stood before the two audit fixes (the last two rows before shorts), which are now on. The table shows the change in **test-period Sharpe**; positive means the change helped.
 
 | Change from the current config | Smallcap | Midcap | Nifty 50 | Verdict |
 |---|---|---|---|---|
@@ -97,8 +97,8 @@ Across all trades since 2018, 27–33% of trades win. Winners average +15% to +2
 | Exit on new bearish MACD divergence | −0.06 | −0.08 | −0.08 | Off: exits too early in strong trends |
 | Buy on EMA 20/50 golden cross | −0.15 | +0.05 | −0.01 | Off: mixed, and drawdown rose everywhere |
 | Exit on EMA 20/50 death cross | 0.00 | 0.00 | 0.00 | No effect: the EMA 50 exit always fires first |
-| Re-entries also need +DI > −DI | 0.00 | 0.00 | 0.00 | Neutral; removes 17 smallcap entries that went against DMI |
-| Long entry at least 2% above EMA 50 | +0.05 | +0.07 | +0.03 | Helps everywhere; cuts one-day whipsaw trades |
+| ✅ Re-entries also need +DI > −DI | 0.00 | 0.00 | 0.00 | On: neutral, but removes 17 smallcap entries that went against DMI |
+| ✅ Long entry at least 2% above EMA 50 | +0.05 | +0.07 | +0.03 | On: helps everywhere, cuts one-day whipsaw trades |
 | Allow shorts | −0.84 | −0.58 | −0.58 | Keep shorts off |
 | Shorts without the MACD pattern (vs shorts with it) | −0.35 | −0.20 | −0.20 | If shorts are used, keep the pattern |
 
@@ -122,6 +122,7 @@ Hourly re-entries helped on every index. The EMA 20/50 cross gave the best Sharp
 
 - **Lookahead:** reruns the strategy on history cut at six dates, with every optional rule on, and confirms no earlier signal changes. None did.
 - **Contradictions:** across 3,031 smallcap entries, none entered below EMA 50. 17 (0.6%) entered while −DI was above +DI, all through the EMA 20 reclaim/bounce re-entries. 255 (8.4%) lasted one bar; those entered a median 1.4% above EMA 50, against 4.5% for the rest.
+- **Fixes, now on:** re-entries also need +DI > −DI, and every entry needs the close 2% above EMA 50. Rerun after the fixes: 2,620 entries, 0 against DMI, 0 below EMA 50, one-bar trades down from 255 to 94 (3.6%). Together they raised test Sharpe from 1.17 / 0.78 / 0.53 to 1.22 / 0.85 / 0.55 (smallcap / midcap / Nifty 50) and trimmed drawdown.
 
 ```bash
 python research/rule_ablation.py --universe smallcap100   # or midcap100, nifty50
