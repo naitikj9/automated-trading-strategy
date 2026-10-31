@@ -92,7 +92,7 @@ def test_pullback_rejection_short_in_downtrend():
     down = up.iloc[::-1].copy()  # mirror the uptrend-with-dip into a downtrend-with-rally
     down.index = up.index
     df = get_strategy("dmi_macd", adx_min=101, di_cross_reentry=False, ema_reclaim_reentry=False,
-                      ema_pullback_entry=True).analyze(down)
+                      ema_pullback_entry=True, short_reentry_needs_adx=False).analyze(down)
     hits = np.flatnonzero(df["short_reentry"])
     assert len(hits) > 0
     for i in hits:
@@ -100,6 +100,19 @@ def test_pullback_rejection_short_in_downtrend():
         assert row["close"] < prev["low"] and row["close"] < row["ema_fast"] < row["ema_slow"]
         recent = df.iloc[i - 2:i + 1]
         assert (recent["high"] >= recent["ema_fast"] * 0.98).any()
+
+
+def test_every_short_entry_needs_rising_adx():
+    up = pullback_data()
+    down = up.iloc[::-1].copy()
+    down.index = up.index
+    params = {"ema_pullback_entry": True, "allow_short": True}
+    df = get_strategy("dmi_macd", **params).analyze(down)
+    shorts = df["short_setup"]
+    assert ((df["adx"] > df["adx"].shift(1)) & (df["adx"] >= 15))[shorts].all()
+
+    blocked = get_strategy("dmi_macd", **params, adx_min=101).analyze(down)
+    assert not blocked["short_setup"].any()
 
 
 def base_then_breakout():

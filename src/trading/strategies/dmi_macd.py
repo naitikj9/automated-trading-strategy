@@ -61,6 +61,7 @@ class DMIMACDStrategy(Strategy):
         "ema_reclaim_reentry": True,  # buy a close back above EMA 20 after a pullback that held EMA 50
         "reclaim_lookback": 10,    # bars of pullback that must have held EMA 50
         "ema_pullback_entry": False,  # enter when a pullback to EMA 20 is rejected
+        "short_reentry_needs_adx": True,  # sell re-entries also need ADX rising and above adx_min
         "ema_touch_pct": 0.02,     # "touching" EMA 20 means coming within 2% of it
         "touch_bars": 3,           # the touch must be within the last 3 bars
         "base_bars": 60,           # accumulation: price stayed inside a tight range this long
@@ -149,12 +150,14 @@ class DMIMACDStrategy(Strategy):
             | (reclaim_up & p["ema_reclaim_reentry"]) | (bounce_up & p["ema_pullback_entry"])
         df["short_reentry"] = (di_cross_down & down_trend & p["di_cross_reentry"]) \
             | (reclaim_down & p["ema_reclaim_reentry"]) | (reject_down & p["ema_pullback_entry"])
+        if p["short_reentry_needs_adx"]:
+            df["short_reentry"] &= adx_rising
         self._accumulation(df)
         if p["skip_inside_base"]:
             df["long_reentry"] &= ~df["in_base"]
             df["short_reentry"] &= ~df["in_base"]
         allowed_long = ~df["in_base"] if p["skip_inside_base"] else True
-        allowed_short = allowed_long
+        allowed_short = allowed_long & adx_rising if p["short_reentry_needs_adx"] else allowed_long
         if p["di_cross_reentry"]:
             triggers["+DI cross re-entry"] = (di_cross_up & up_trend & allowed_long, di_cross_down & down_trend & allowed_short)
         if p["ema_reclaim_reentry"]:

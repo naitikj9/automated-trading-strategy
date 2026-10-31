@@ -28,6 +28,7 @@ strategy:
     di_cross_reentry: true # in an EMA uptrend, buy when +DI crosses back above -DI
     ema_reclaim_reentry: true # buy a close back above EMA 20 after a pullback that held EMA 50
     ema_pullback_entry: true  # enter when a pullback to within 2% of EMA 20 is rejected
+    short_reentry_needs_adx: true # every sell entry needs ADX rising and >= adx_min
     poc_filter: false      # longs only above the volume-profile POC, shorts only below
     poc_retest_entry: false # after a value-area breakout, buy a bounce off POC
     exit_on_di_cross: true
