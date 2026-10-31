@@ -34,7 +34,7 @@ The buy rules mirrored. Every sell entry, re-entries included, needs **ADX at le
 ### Exit
 - ✅ **Long:** the close falls below EMA 50
 - ✅ **Short:** the close rises above EMA 50
-- ⚪ **Divergence exit:** exit a long on a new bearish MACD divergence (`exit_on_divergence`)
+- ⚪ **Divergence exit:** exit a long on a new bearish MACD divergence (`exit_on_divergence`; off, because it cut winners short on all three indices)
 - ⚪ **DI exit:** also exit on the opposite DI cross (`exit_on_di_cross`; off, because exiting on EMA 50 alone did better on unseen data)
 
 ### Shown in the scanner
@@ -92,6 +92,7 @@ The strategy works best on smallcaps and keeps drawdowns to roughly a third of b
 | POC retest entry | +0.03 | 0.00 | 0.00 | No clear effect |
 | Accumulation breakout entry | 0.00 | −0.01 | 0.00 | No clear effect |
 | Remove EMA 20 reclaim / bounce | ~0 | ~0 | ~0 | Overlaps the +DI cross |
+| Exit on new bearish MACD divergence | −0.06 | −0.08 | −0.08 | Off: exits too early in strong trends |
 | Allow shorts | −1.10 | −0.73 | −0.83 | Keep shorts off |
 
 ### 1-hour re-entries
