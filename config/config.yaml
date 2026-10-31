@@ -5,6 +5,7 @@ end: null
 
 # Stocks the scanner checks every day
 watchlist:
+  - ^CNXPHARMA
   - BSE.NS
   - PASHUPATI.NS
   - LAURUSLABS.NS
@@ -17,12 +18,20 @@ strategy:
   params:
     di_length: 14
     adx_smoothing: 14
-    adx_min: 0
+    adx_min: 15            # ADX must be rising and at least 15
     adx_rising_bars: 1
-    macd_lookback: 5
+    macd_lookback: null    # null = MACD just has to be on the right side of its signal
     zero_band_pct: 0.005
     min_strength: 1        # 1 = normal+, 2 = strong+, 3 = super strong only
+    require_pattern: false # true = only trade after a MACD double dip / divergence
     require_ema_trend: true
+    di_cross_reentry: true # in an EMA uptrend, buy when +DI crosses back above -DI
+    ema_reclaim_reentry: true # buy a close back above EMA 20 after a pullback that held EMA 50
+    ema_pullback_entry: true  # enter when a pullback to within 2% of EMA 20 is rejected
+    exit_on_di_cross: true
+    base_max_range: 0.25   # accumulation = 60 bars inside a range no wider than 25%
+    accumulation_breakout: false # buy a high-volume close above an accumulation range
+    skip_inside_base: false      # ignore re-entries while still inside the range
     exit_ema: 50           # tuned on 2018-2023; beat EMA 20 on unseen 2024-2026 in all three indices
     allow_short: false
 

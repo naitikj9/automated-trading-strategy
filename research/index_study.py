@@ -39,11 +39,13 @@ TEST = ("2024-01-01", None)
 COSTS = {"commission_pct": 0.0003, "slippage_pct": 0.0005}
 
 GRID = {
-    "adx_min": [0, 20, 25],
-    "min_strength": [1, 2, 3],
-    "exit_ema": [20, 50, None],
-    "macd_lookback": [3, 5],
+    "adx_min": [0, 15, 25],
+    "require_pattern": [False, True],
+    "di_cross_reentry": [False, True],
+    "ema_reclaim_reentry": [False, True],
+    "exit_on_di_cross": [True, False],
 }
+BOOL_PARAMS = {"require_pattern", "di_cross_reentry", "ema_reclaim_reentry", "exit_on_di_cross"}
 
 CACHE = ROOT / "data" / "cache"
 
@@ -131,7 +133,7 @@ def main():
     print(grid.head(10).round(3).to_string(index=False))
 
     best = {k: grid.iloc[0][k] for k in GRID}
-    best = {k: (None if pd.isna(v) else int(v)) for k, v in best.items()}
+    best = {k: (None if pd.isna(v) else bool(v) if k in BOOL_PARAMS else int(v)) for k, v in best.items()}
     candidates = {"defaults": {}, "tuned": best}
 
     summary = []

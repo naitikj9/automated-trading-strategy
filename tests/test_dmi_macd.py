@@ -49,6 +49,108 @@ def test_shorts_only_when_allowed():
     assert get_strategy("dmi_macd", allow_short=True).generate_signals(data).iloc[-1] == -1
 
 
+def test_adx_floor_blocks_weak_trends():
+    data = trend_data(0.01)
+    strategy = get_strategy("dmi_macd", adx_min=101, di_cross_reentry=False, ema_reclaim_reentry=False)
+    assert not strategy.analyze(data)["long_setup"].any()
+
+
+def test_di_cross_reenters_uptrend_without_adx():
+    data = trend_data(0.01)
+    df = get_strategy("dmi_macd", adx_min=101, ema_reclaim_reentry=False).analyze(data)
+    assert (df["long_setup"] == df["long_reentry"]).all()  # ADX floor blocks every other entry
+    for i in np.flatnonzero(df["long_reentry"]):
+        row, prev = df.iloc[i], df.iloc[i - 1]
+        assert row["plus_di"] > row["minus_di"] and prev["plus_di"] <= prev["minus_di"]
+        assert row["close"] > row["ema_fast"] > row["ema_slow"]
+
+
+def pullback_data():
+    """Steady 0.3% a bar uptrend with a 4-bar, ~4.5% dip at bar 120 that stays above EMA 50."""
+    steps = np.full(160, 0.003)
+    steps[120:124] = -0.0115
+    close = 100 * np.cumprod(1 + steps)
+    idx = pd.date_range("2024-01-01", periods=len(close), freq="B")
+    return pd.DataFrame(
+        {"open": close, "high": close * 1.002, "low": close * 0.998, "close": close, "volume": 1000}, index=idx
+    )
+
+
+def test_ema_reclaim_reentry_after_pullback_that_held_ema50():
+    data = pullback_data()
+    df = get_strategy("dmi_macd", adx_min=101, di_cross_reentry=False).analyze(data)
+    hits = np.flatnonzero(df["long_reentry"])
+    assert len(hits) > 0
+    for i in hits:
+        row, prev = df.iloc[i], df.iloc[i - 1]
+        assert row["close"] > row["ema_fast"] > row["ema_slow"] and prev["close"] <= prev["ema_fast"]
+        assert (df["low"].iloc[i - 9:i + 1] > df["ema_slow"].iloc[i - 9:i + 1]).all()
+
+
+def test_pullback_rejection_short_in_downtrend():
+    up = pullback_data()
+    down = up.iloc[::-1].copy()  # mirror the uptrend-with-dip into a downtrend-with-rally
+    down.index = up.index
+    df = get_strategy("dmi_macd", adx_min=101, di_cross_reentry=False, ema_reclaim_reentry=False,
+                      ema_pullback_entry=True).analyze(down)
+    hits = np.flatnonzero(df["short_reentry"])
+    assert len(hits) > 0
+    for i in hits:
+        row, prev = df.iloc[i], df.iloc[i - 1]
+        assert row["close"] < prev["low"] and row["close"] < row["ema_fast"] < row["ema_slow"]
+        recent = df.iloc[i - 2:i + 1]
+        assert (recent["high"] >= recent["ema_fast"] * 0.98).any()
+
+
+def base_then_breakout():
+    """80 flat bars oscillating between 95 and 105, then a high-volume close at 110."""
+    n = 81
+    close = 100 + 5 * np.sin(np.arange(n) / 3.0)
+    close[-1] = 110.0
+    volume = np.full(n, 1000.0)
+    volume[-1] = 5000.0
+    idx = pd.date_range("2024-01-01", periods=n, freq="B")
+    return pd.DataFrame({"open": close, "high": close + 0.5, "low": close - 0.5, "close": close, "volume": volume},
+                        index=idx)
+
+
+def test_accumulation_breakout_needs_tight_range_and_volume():
+    data = base_then_breakout()
+    df = get_strategy("dmi_macd").analyze(data)
+    assert df["in_base"].iloc[-2] and df["base_breakout"].iloc[-1]
+    assert not df["base_breakout"].iloc[:-1].any()
+
+    quiet = data.copy()
+    quiet.loc[quiet.index[-1], "volume"] = 1000.0
+    assert not get_strategy("dmi_macd").analyze(quiet)["base_breakout"].iloc[-1]
+
+    loose = get_strategy("dmi_macd", base_max_range=0.05).analyze(data)
+    assert not loose["base_breakout"].any()
+
+
+def dip_series(second_low, second_price):
+    """Oscillator with a low of -10 at bar 20 and `second_low` at bar 60; prices at those bars set separately."""
+    n = 100
+    x = np.arange(n)
+    osc = -10 * np.exp(-((x - 20) / 4.0) ** 2) + second_low * np.exp(-((x - 60) / 4.0) ** 2) + 0.5
+    price = pd.Series(100.0, index=range(n))
+    price[20], price[60] = 90.0, second_price
+    return pd.Series(osc, index=range(n)), price
+
+
+def test_double_dip_with_higher_price_low_is_hidden_divergence():
+    osc, price = dip_series(second_low=-9.5, second_price=95.0)
+    labels = get_strategy("dmi_macd")._patterns(osc, price, bullish=True)
+    assert labels[60 + 5] == "double dip + hidden bullish divergence"
+    assert (labels[:65] == "").all()  # nothing before the second low is confirmed
+
+
+def test_lower_price_low_with_higher_macd_low_is_divergence():
+    osc, price = dip_series(second_low=-4.0, second_price=85.0)
+    labels = get_strategy("dmi_macd")._patterns(osc, price, bullish=True)
+    assert labels[65] == "bullish divergence"
+
+
 def test_min_strength_filters_weaker_crossovers():
     data = trend_data(0.01)
     loose = get_strategy("dmi_macd", min_strength=1).analyze(data)["long_setup"].sum()

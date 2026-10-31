@@ -45,6 +45,13 @@ def main():
             "ADX": round(last["adx"], 1),
             "ADX up": "yes" if last["adx"] > prev["adx"] else "no",
             "MACD": f"{macd_side} {STRENGTH_LABELS[int(strength)]}",
+            "pattern": " | ".join(filter(None, [
+                last["bull_pattern"],
+                last["bear_pattern"],
+                "base breakout" if last["base_breakout"] else "",
+                "base breakdown" if last["base_breakdown"] else "",
+                "in base" if last["in_base"] else "",
+            ])) or "-",
             "action": action(int(prev["position"]), int(last["position"])),
         })
     print(pd.DataFrame(rows).to_string(index=False))
