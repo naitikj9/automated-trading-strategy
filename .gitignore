@@ -11,3 +11,4 @@ data/cache/
 logs/
 *.log
 results/
+paper/

@@ -53,3 +53,10 @@ risk:
 hourly:
   enabled: true
   triggers: [ema_cross]   # ema_cross = 1h EMA 20 crosses above EMA 50; di_cross = 1h +DI crosses above -DI
+
+# Paper trading (paper_trade.py). The book is saved in `folder`.
+paper:
+  universe: smallcap100   # watchlist, or an NSE index: nifty50, midcap100, smallcap100
+  capital: 1000000
+  max_positions: null     # null = capital split equally across every stock, as in the backtests
+  folder: paper

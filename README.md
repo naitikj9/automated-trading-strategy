@@ -133,6 +133,29 @@ python research/index_study.py --universe smallcap100     # parameter grid searc
 
 Caveat: these are today's index members, so earlier years carry survivorship bias. Daily bars approximate the volume and market profiles; TradingView uses intraday data.
 
+## Paper trading
+
+[`paper_trade.py`](paper_trade.py) runs the live config on fresh Yahoo data and keeps a saved book in `paper/` (`state.json`, `orders.csv`, `trades.csv`). The rules, fills and costs are the backtest's. Universe, capital and position limit are under `paper:` in the config.
+
+```bash
+python paper_trade.py daily    # after 15:45 IST: daily exits, then entries
+python paper_trade.py hourly   # during the session, hourly: 1h EMA cross re-entries while flat
+python paper_trade.py report   # open positions, closed trades, win rate, equity
+```
+
+Re-running is safe, because a bar that has already been acted on is skipped. Use `--folder` to dry-run without touching the real book.
+
+**Mirror it in TradingView.** Each run prints its new orders as `BUY 24 x NSE:SYNGENE ~Rs 402.90`. In TradingView, open the trading panel, connect **Paper Trading**, and place the same market order. The script's book is the reference; TradingView lets you watch the same trades on the chart.
+
+**Run it automatically on Windows.** [`run_paper.bat`](run_paper.bat) runs one check and appends the output to `logs/paper.log`. Clone the repo to a permanent folder, then schedule it from that folder:
+
+```bat
+schtasks /create /tn "PaperTrade daily" /tr "C:\path\to\repo\run_paper.bat daily" /sc weekly /d MON,TUE,WED,THU,FRI /st 16:00
+schtasks /create /tn "PaperTrade hourly" /tr "C:\path\to\repo\run_paper.bat hourly" /sc weekly /d MON,TUE,WED,THU,FRI /st 10:20 /ri 60 /du 05:00
+```
+
+Limits: if the PC is off on a day, that day's daily signals are missed (the next run acts only on the latest bar). Yahoo prices arrive with a short delay. With `max_positions: null`, capital is split across every stock in the universe, as in the backtests, so each trade is small. Set `max_positions` to 10–20 for bigger trades, but that sizing has not been backtested.
+
 ## Daily scanner
 
 ```bash
