@@ -9,7 +9,7 @@ A modular Python framework for designing, backtesting and (eventually) live-trad
 | Main | DMI (14, 14) | +DI above −DI, and ADX rising |
 | Trigger and grade | MACD (12, 26, 9) | MACD line crosses above signal within the last 5 bars |
 | Trend filter | EMA 20 / EMA 50 | Close above both EMAs |
-| Exit | DMI / EMA 20 | −DI crosses above +DI, or close falls below EMA 20 |
+| Exit | DMI / EMA 50 | −DI crosses above +DI, or close falls below EMA 50 (tuned; the original rule used EMA 20) |
 
 Each MACD crossover is graded by where it happens:
 

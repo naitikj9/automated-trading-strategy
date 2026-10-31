@@ -23,7 +23,7 @@ strategy:
     zero_band_pct: 0.005
     min_strength: 1        # 1 = normal+, 2 = strong+, 3 = super strong only
     require_ema_trend: true
-    exit_ema: 20
+    exit_ema: 50           # tuned on 2018-2023; beat EMA 20 on unseen 2024-2026 in all three indices
     allow_short: false
 
 backtest:
