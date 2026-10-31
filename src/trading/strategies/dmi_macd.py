@@ -119,6 +119,7 @@ class DMIMACDStrategy(Strategy):
         if p["require_pattern"]:
             df["long_setup"] &= df["bull_pattern"] != ""
             df["short_setup"] &= df["bear_pattern"] != ""
+        triggers = {"trend: DI + ADX + MACD + EMA": (df["long_setup"].copy(), df["short_setup"].copy())}
 
         # Comparisons with NaN are False, so the first bar with DI values never counts as a cross.
         prev_plus, prev_minus = df["plus_di"].shift(1), df["minus_di"].shift(1)
@@ -152,15 +153,37 @@ class DMIMACDStrategy(Strategy):
         if p["skip_inside_base"]:
             df["long_reentry"] &= ~df["in_base"]
             df["short_reentry"] &= ~df["in_base"]
+        allowed_long = ~df["in_base"] if p["skip_inside_base"] else True
+        allowed_short = allowed_long
+        if p["di_cross_reentry"]:
+            triggers["+DI cross re-entry"] = (di_cross_up & up_trend & allowed_long, di_cross_down & down_trend & allowed_short)
+        if p["ema_reclaim_reentry"]:
+            triggers["EMA 20 reclaim (held EMA 50)"] = (reclaim_up & allowed_long, reclaim_down & allowed_short)
+        if p["ema_pullback_entry"]:
+            triggers["EMA 20 pullback rejected"] = (bounce_up & allowed_long, reject_down & allowed_short)
         df["long_setup"] |= df["long_reentry"]
         df["short_setup"] |= df["short_reentry"]
         if p["accumulation_breakout"]:
             df["long_setup"] |= df["base_breakout"]
             df["short_setup"] |= df["base_breakdown"]
+            triggers["accumulation breakout"] = (df["base_breakout"], df["base_breakdown"])
         if p["poc_filter"] or p["poc_retest_entry"]:
             self._poc_rules(df)
+            if p["poc_retest_entry"]:
+                triggers["POC retest"] = (df["poc_retest_up"], df["poc_retest_down"])
+        df["long_reason"] = self._reasons(df["long_setup"], {k: v[0] for k, v in triggers.items()})
+        df["short_reason"] = self._reasons(df["short_setup"], {k: v[1] for k, v in triggers.items()})
         df["position"] = self._positions(df)
         return df
+
+    @staticmethod
+    def _reasons(setup: pd.Series, triggers: dict) -> pd.Series:
+        """Name the rules behind each setup bar, e.g. 'trend: ... + POC retest'."""
+        names = pd.Series("", index=setup.index, dtype=object)
+        for name, fired in triggers.items():
+            hit = setup & fired.fillna(False).astype(bool)
+            names[hit] = names[hit].where(names[hit] == "", names[hit] + " + ") + name
+        return names
 
     def generate_signals(self, data: pd.DataFrame) -> pd.Series:
         return self.analyze(data)["position"]
@@ -233,14 +256,14 @@ class DMIMACDStrategy(Strategy):
         df[["poc", "vah", "val", "buy_pct"]] = rolling_poc(df, p["poc_lookback"], p["poc_bins"])
         if p["poc_retest_entry"]:
             touch, mem = p["poc_touch_pct"], p["breakout_memory"]
-            broke_up = (df["close"] > df["vah"]).rolling(mem).max().astype(bool)
-            broke_down = (df["close"] < df["val"]).rolling(mem).max().astype(bool)
-            retest_up = broke_up & (df["low"] <= df["poc"] * (1 + touch)) & (df["close"] > df["poc"]) \
+            broke_up = (df["close"] > df["vah"]).rolling(mem).max().fillna(0).astype(bool)
+            broke_down = (df["close"] < df["val"]).rolling(mem).max().fillna(0).astype(bool)
+            df["poc_retest_up"] = broke_up & (df["low"] <= df["poc"] * (1 + touch)) & (df["close"] > df["poc"]) \
                 & (df["close"] > df["high"].shift(1)) & (df["ema_fast"] > df["ema_slow"])
-            retest_down = broke_down & (df["high"] >= df["poc"] * (1 - touch)) & (df["close"] < df["poc"]) \
+            df["poc_retest_down"] = broke_down & (df["high"] >= df["poc"] * (1 - touch)) & (df["close"] < df["poc"]) \
                 & (df["close"] < df["low"].shift(1)) & (df["ema_fast"] < df["ema_slow"])
-            df["long_setup"] |= retest_up
-            df["short_setup"] |= retest_down
+            df["long_setup"] |= df["poc_retest_up"]
+            df["short_setup"] |= df["poc_retest_down"]
         if p["poc_filter"]:
             df["long_setup"] &= df["close"] > df["poc"]
             df["short_setup"] &= df["close"] < df["poc"]

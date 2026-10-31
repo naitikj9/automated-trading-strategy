@@ -122,3 +122,14 @@ def rolling_poc(data: pd.DataFrame, lookback: int = 120, bins: int = 24, value_a
         edges, total, buy, poc, lo_i, hi_i = _profile(h[s], l[s], c[s], v[s], bins, value_area)
         out[i - 1] = [(edges[poc] + edges[poc + 1]) / 2, edges[hi_i + 1], edges[lo_i], 100 * buy.sum() / total.sum()]
     return pd.DataFrame(out, index=data.index, columns=["poc", "vah", "val", "buy_pct"])
+
+
+def market_profile(data: pd.DataFrame, bins: int = 24, value_area: float = 0.70) -> dict:
+    """Market Profile (TPO): like the volume profile, but counts time spent at each price instead of volume.
+
+    True TPO uses 30-minute periods; with daily bars each day counts as one period spread across its range.
+    """
+    profile = volume_profile(data.assign(volume=1.0), bins, value_area)
+    profile["levels"] = profile["levels"].rename(columns={"volume": "tpo"})[["price", "tpo"]]
+    del profile["buy_pct"]
+    return profile
