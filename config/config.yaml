@@ -46,3 +46,8 @@ backtest:
 risk:
   max_position_pct: 1.0
   stop_loss_pct: 0.02
+
+# Daily chart decides the trend; the 1-hour chart times re-entries while flat (see strategies/mtf.py)
+hourly:
+  enabled: true
+  triggers: [ema_cross]   # ema_cross = 1h EMA 20 crosses above EMA 50; di_cross = 1h +DI crosses above -DI

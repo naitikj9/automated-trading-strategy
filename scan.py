@@ -1,4 +1,8 @@
-"""Daily scanner: shows the DMI + MACD reading and action for every watchlist stock."""
+"""Daily scanner: shows the DMI + MACD reading and action for every watchlist stock.
+
+With `hourly.enabled` in the config, the action also counts 1-hour re-entries, and the
+"1h trigger" column shows when today's hourly trigger fired.
+"""
 import argparse
 import sys
 from pathlib import Path
@@ -8,16 +12,34 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from trading.data.loader import load_yfinance  # noqa: E402
+from trading.data.loader import load_yfinance, load_yfinance_hourly  # noqa: E402
 from trading.indicators import volume_profile  # noqa: E402
 from trading.strategies import get_strategy  # noqa: E402
 from trading.strategies.dmi_macd import STRENGTH_LABELS  # noqa: E402
+from trading.strategies.mtf import mtf_positions, session_dates  # noqa: E402
 
 
 def action(prev_pos: int, pos: int) -> str:
     if pos == prev_pos:
         return {1: "HOLD LONG", -1: "HOLD SHORT", 0: "-"}[pos]
     return {1: "BUY", -1: "SELL SHORT", 0: "EXIT"}[pos]
+
+
+def hourly_action(df: pd.DataFrame, symbol: str, hourly_cfg: dict, exit_ema: int) -> tuple[str, str] | None:
+    """Action for the latest session using 1-hour re-entries, and the time of today's 1h trigger if any."""
+    try:
+        hourly = load_yfinance_hourly(symbol)
+    except Exception:
+        return None
+    if len(hourly) < 100:
+        return None
+    m = mtf_positions(df, hourly, exit_ema=exit_ema, triggers=tuple(hourly_cfg["triggers"]))
+    dates = session_dates(m.index)
+    today = m[dates == dates[-1]]
+    before = m[dates < dates[-1]]
+    prev_pos = int(before["position"].iloc[-1]) if len(before) else 0
+    fired = today.index[today["event"] == "1h trigger"]
+    return action(prev_pos, int(m["position"].iloc[-1])), fired[0].strftime("%H:%M") if len(fired) else "-"
 
 
 def main():
@@ -29,6 +51,7 @@ def main():
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
     strategy = get_strategy(cfg["strategy"]["name"], **cfg["strategy"]["params"])
+    hourly_cfg = cfg.get("hourly", {})
 
     rows = []
     for symbol in args.symbols or cfg["watchlist"]:
@@ -59,6 +82,11 @@ def main():
             ])) or "-",
             "action": action(int(prev["position"]), int(last["position"])),
         })
+        if hourly_cfg.get("enabled"):
+            result = hourly_action(df, symbol, hourly_cfg, strategy.params["exit_ema"])
+            rows[-1]["1h trigger"] = result[1] if result else "no 1h data"
+            if result:
+                rows[-1]["action"] = result[0]
     print(pd.DataFrame(rows).to_string(index=False))
 
 

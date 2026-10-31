@@ -7,7 +7,7 @@ A modular Python framework for designing, backtesting and (eventually) live-trad
 Daily candles. A signal forms at the close. One position at a time. ✅ on in [`config/config.yaml`](config/config.yaml), ⚪ in the code but off.
 
 ### Buy entry
-All four must hold:
+All four must hold, plus a MACD pattern (rule 12):
 
 1. ✅ **+DI above −DI** (DMI 14, 14 is the main indicator)
 2. ✅ **ADX at least 15 and rising**
@@ -19,20 +19,23 @@ Re-entries, which skip the ADX and MACD checks because the trend is already esta
 5. ✅ **+DI cross:** in an uptrend, +DI crosses back above −DI
 6. ✅ **EMA 20 reclaim:** the pullback held EMA 50, and the close moves back above EMA 20
 7. ✅ **EMA 20 bounce:** the low comes within 2% of EMA 20, then the close tops the previous high
+8. ✅ **1-hour EMA cross:** while flat and the daily trend is intact, the 1-hour EMA 20 crosses above EMA 50 (enters during the day, not at the close)
 
 Optional:
 
-8. ⚪ **Accumulation breakout:** 60 days inside a range no wider than 25%, then a close above it on 1.5× volume
-9. ⚪ **POC retest:** after breaking above the value area, price bounces off the volume POC
-10. ⚪ **POC filter:** buy only above POC
-11. ⚪ **MACD pattern required:** a double dip or divergence must be present
+9. ⚪ **Accumulation breakout:** 60 days inside a range no wider than 25%, then a close above it on 1.5× volume
+10. ⚪ **POC retest:** after breaking above the value area, price bounces off the volume POC
+11. ⚪ **POC filter:** buy only above POC
+12. ✅ **MACD pattern required:** a double dip or divergence must be present for the main entry (re-entries skip it)
 
 ### Sell entry (⚪ off, since positional shorts need futures)
 The buy rules mirrored. Every sell entry, re-entries included, needs **ADX at least 15 and rising**.
 
 ### Exit
-- **Long:** −DI crosses above +DI, or the close falls below EMA 50
-- **Short:** +DI crosses above −DI, or the close rises above EMA 50
+- ✅ **Long:** the close falls below EMA 50
+- ✅ **Short:** the close rises above EMA 50
+- ⚪ **Divergence exit:** exit a long on a new bearish MACD divergence (`exit_on_divergence`)
+- ⚪ **DI exit:** also exit on the opposite DI cross (`exit_on_di_cross`; off, because exiting on EMA 50 alone did better on unseen data)
 
 ### Shown in the scanner
 - MACD double dip / double top, regular and hidden divergence, confirmed without lookahead
@@ -50,14 +53,12 @@ python research/trade_example.py LAURUSLABS.NS --start 2026-01-01
 
 | Entry | Why | Exit | Why | Return |
 |---|---|---|---|---|
-| 14 Jan, ₹1,089 | +DI cross re-entry | 16 Jan, ₹1,076 | −DI back above | −1.3% |
-| 25 Feb, ₹1,075 | Trend entry | 6 Mar, ₹1,025 | −DI back above | −4.7% |
-| **15 Apr, ₹1,116** | **Trend entry: ADX 15.5 rising, +DI 30.7 vs −DI 17.1, MACD bullish** | **21 Oct, ₹2,012** | −DI back above | **+80.3%** |
-| 26 Oct, ₹2,059 | EMA 20 reclaim + bounce, EMA 50 held | open | | +16.8% |
+| 25 Feb, ₹1,075 | Trend entry: ADX 17.8 rising, +DI 28.8 vs −DI 16.5, MACD bullish with a pattern | 9 Mar, ₹1,020 | Close below EMA 50 | −5.1% |
+| **23 Apr, ₹1,128** | **EMA 20 pullback rejected: ADX 19.3, +DI 26.5 vs −DI 17.5** | **open** | Price never closed below EMA 50 | **+113.3%** |
 
 ![Laurus Labs trades](docs/example_lauruslabs.png)
 
-The pattern is typical of trend following: small losses while no trend forms, then one trade that rides the whole move. The same script on Nifty Pharma gives 8 trades and +9.3% ([chart](docs/example_cnxpharma.png)).
+The pattern is typical of trend following: small losses while no trend forms, then one trade that rides the whole move. The same script on Nifty Pharma gives 4 trades and +10.0%, with the 29 Apr to 15 Sep trade making +12.6% ([chart](docs/example_cnxpharma.png)).
 
 ## Research
 
@@ -93,8 +94,21 @@ The strategy works best on smallcaps and keeps drawdowns to roughly a third of b
 | Remove EMA 20 reclaim / bounce | ~0 | ~0 | ~0 | Overlaps the +DI cross |
 | Allow shorts | −1.10 | −0.73 | −0.83 | Keep shorts off |
 
+### 1-hour re-entries
+
+[`research/hourly_reentry_study.py`](research/hourly_reentry_study.py) keeps the daily entries and exits, and lets a flat position re-enter on a 1-hour trigger while the daily trend is intact. Yahoo keeps about two years of hourly data, so this covers 2024 onwards only.
+
+| Universe | Daily only | 1h +DI cross | 1h EMA 20/50 cross | Either |
+|---|---|---|---|---|
+| Smallcap 100 | 9.9%, Sharpe 1.19 | 10.9%, 1.21 | 10.7%, 1.22 | 11.3%, 1.23 |
+| Midcap 100 | 6.6%, 0.90 | 7.2%, 0.93 | 7.2%, 0.94 | 7.2%, 0.91 |
+| Nifty 50 | 2.0%, 0.33 | 2.2%, 0.35 | 2.8%, 0.44 | 2.7%, 0.42 |
+
+Hourly re-entries helped on every index. The EMA 20/50 cross gave the best Sharpe with the smallest rise in drawdown, so it is the one switched on. With only two years of hourly data there is no separate unseen period, so treat this gain as provisional.
+
 ```bash
 python research/rule_ablation.py --universe smallcap100   # or midcap100, nifty50
+python research/hourly_reentry_study.py --universe smallcap100
 python research/index_study.py --universe smallcap100     # parameter grid search
 ```
 
