@@ -28,7 +28,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..indicators import dmi, ema, macd, stochastic
+from ..indicators import dmi, ema, macd, rolling_poc, stochastic
 from .base import Strategy
 
 STRENGTH_LABELS = {3: "super strong", 2: "strong", 1: "normal", 0: "-"}
@@ -68,6 +68,12 @@ class DMIMACDStrategy(Strategy):
         "breakout_volume_mult": 1.5,  # breakout volume vs 50-day average; 0 to skip the check
         "accumulation_breakout": False,  # buy when price closes above an accumulation range
         "skip_inside_base": False,  # ignore re-entries while price is still inside the range
+        "poc_lookback": 120,       # volume profile window for POC / value area
+        "poc_bins": 24,
+        "poc_filter": False,       # longs only above POC (buyers in control), shorts only below
+        "poc_retest_entry": False, # after breaking above the value area, buy a bounce off POC
+        "poc_touch_pct": 0.03,     # "touching" POC means a low within 3% of it
+        "breakout_memory": 30,     # the value-area breakout must be within this many bars
         "exit_on_di_cross": True,  # exit when -DI crosses above +DI
         "exit_ema": 50,        # exit when close crosses back through this EMA; None to disable
         "allow_short": False,    # NSE cash shorts are intraday only; enable for F&O
@@ -151,6 +157,8 @@ class DMIMACDStrategy(Strategy):
         if p["accumulation_breakout"]:
             df["long_setup"] |= df["base_breakout"]
             df["short_setup"] |= df["base_breakdown"]
+        if p["poc_filter"] or p["poc_retest_entry"]:
+            self._poc_rules(df)
         df["position"] = self._positions(df)
         return df
 
@@ -218,6 +226,24 @@ class DMIMACDStrategy(Strategy):
         df["in_base"] = tight & df["close"].between(base_low, base_high)
         df["base_breakout"] = tight & (df["close"] > base_high) & volume_ok
         df["base_breakdown"] = tight & (df["close"] < base_low) & volume_ok
+
+    def _poc_rules(self, df: pd.DataFrame) -> None:
+        """Volume profile rules: trade on the side of POC that holds control, and buy a POC retest."""
+        p = self.params
+        df[["poc", "vah", "val", "buy_pct"]] = rolling_poc(df, p["poc_lookback"], p["poc_bins"])
+        if p["poc_retest_entry"]:
+            touch, mem = p["poc_touch_pct"], p["breakout_memory"]
+            broke_up = (df["close"] > df["vah"]).rolling(mem).max().astype(bool)
+            broke_down = (df["close"] < df["val"]).rolling(mem).max().astype(bool)
+            retest_up = broke_up & (df["low"] <= df["poc"] * (1 + touch)) & (df["close"] > df["poc"]) \
+                & (df["close"] > df["high"].shift(1)) & (df["ema_fast"] > df["ema_slow"])
+            retest_down = broke_down & (df["high"] >= df["poc"] * (1 - touch)) & (df["close"] < df["poc"]) \
+                & (df["close"] < df["low"].shift(1)) & (df["ema_fast"] < df["ema_slow"])
+            df["long_setup"] |= retest_up
+            df["short_setup"] |= retest_down
+        if p["poc_filter"]:
+            df["long_setup"] &= df["close"] > df["poc"]
+            df["short_setup"] &= df["close"] < df["poc"]
 
     def _positions(self, df: pd.DataFrame) -> pd.Series:
         use_di = self.params["exit_on_di_cross"]

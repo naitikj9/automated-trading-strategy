@@ -6,7 +6,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
-from trading.indicators import dmi, rma  # noqa: E402
+from trading.indicators import dmi, rma, rolling_poc, volume_profile  # noqa: E402
 from trading.strategies import get_strategy  # noqa: E402
 
 
@@ -126,6 +126,33 @@ def test_accumulation_breakout_needs_tight_range_and_volume():
 
     loose = get_strategy("dmi_macd", base_max_range=0.05).analyze(data)
     assert not loose["base_breakout"].any()
+
+
+def test_volume_profile_finds_heavy_level_and_buyer_share():
+    idx = pd.date_range("2024-01-01", periods=4, freq="B")
+    data = pd.DataFrame({
+        "high": [101.0, 101.0, 111.0, 121.0],
+        "low": [99.0, 99.0, 109.0, 119.0],
+        "close": [101.0, 101.0, 109.0, 119.0],  # buyers at 100, sellers higher up
+        "volume": [1000.0, 1000.0, 100.0, 100.0],
+    }, index=idx)
+    vp = volume_profile(data, bins=11)
+    assert abs(vp["poc"] - 100) < 2
+    assert vp["val"] <= 100 <= vp["vah"]
+    assert np.isclose(vp["buy_pct"], 100 * 2000 / 2200)
+
+
+def test_rolling_poc_uses_only_past_bars():
+    data = trend_data(0.01)
+    full = rolling_poc(data, lookback=50)
+    cut = rolling_poc(data.iloc[:120], lookback=50)
+    pd.testing.assert_frame_equal(full.iloc[:120], cut)
+    assert full["poc"].iloc[:49].isna().all()
+
+
+def test_poc_filter_keeps_longs_above_poc():
+    df = get_strategy("dmi_macd", poc_filter=True, poc_lookback=50).analyze(trend_data(0.01))
+    assert (df.loc[df["long_setup"], "close"] > df.loc[df["long_setup"], "poc"]).all()
 
 
 def dip_series(second_low, second_price):

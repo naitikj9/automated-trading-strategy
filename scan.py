@@ -9,6 +9,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from trading.data.loader import load_yfinance  # noqa: E402
+from trading.indicators import volume_profile  # noqa: E402
 from trading.strategies import get_strategy  # noqa: E402
 from trading.strategies.dmi_macd import STRENGTH_LABELS  # noqa: E402
 
@@ -34,6 +35,7 @@ def main():
         data = load_yfinance(symbol, cfg["start"], interval=cfg["interval"])
         df = strategy.analyze(data)
         last, prev = df.iloc[-1], df.iloc[-2]
+        vp = volume_profile(data.iloc[-strategy.params["poc_lookback"]:], strategy.params["poc_bins"])
         macd_side = "bull" if last["macd"] > last["signal"] else "bear"
         strength = last["bull_strength"] if macd_side == "bull" else last["bear_strength"]
         rows.append({
@@ -44,6 +46,9 @@ def main():
             "-DI": round(last["minus_di"], 1),
             "ADX": round(last["adx"], 1),
             "ADX up": "yes" if last["adx"] > prev["adx"] else "no",
+            "POC": round(vp["poc"], 1),
+            "vs POC": f"{100 * (last['close'] / vp['poc'] - 1):+.1f}%",
+            "buyers": f"{vp['buy_pct']:.0f}%",
             "MACD": f"{macd_side} {STRENGTH_LABELS[int(strength)]}",
             "pattern": " | ".join(filter(None, [
                 last["bull_pattern"],

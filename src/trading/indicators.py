@@ -58,3 +58,67 @@ def stochastic(data: pd.DataFrame, k_length: int = 14, k_smooth: int = 3, d_smoo
     raw_k = 100 * (data["close"] - low_min) / (high_max - low_min)
     k = raw_k.rolling(k_smooth).mean()
     return pd.DataFrame({"stoch_k": k, "stoch_d": k.rolling(d_smooth).mean()})
+
+
+def _profile(h, l, c, v, bins: int, value_area: float):
+    """Core of `volume_profile` on numpy arrays: bin edges, total and buy volume per bin, POC and value area."""
+    edges = np.linspace(l.min(), h.max(), bins + 1)
+
+    # bars x bins: the fraction of each bar's range that falls in each price bin
+    span = (h - l)[:, None]
+    overlap = np.clip(np.minimum(edges[1:], h[:, None]) - np.maximum(edges[:-1], l[:, None]), 0, None)
+    flat = span[:, 0] == 0
+    share = np.divide(overlap, span, out=np.zeros_like(overlap), where=~flat[:, None])
+    share[flat, np.clip(np.digitize(c[flat], edges[1:-1]), 0, bins - 1)] = 1.0
+    buy_frac = np.where(flat, 0.5, (c - l) / np.where(flat, 1, h - l))
+
+    total = v @ share
+    buy = (v * buy_frac) @ share
+
+    poc = int(np.argmax(total))
+    lo_i = hi_i = poc
+    while total[lo_i:hi_i + 1].sum() < value_area * total.sum():
+        below = total[lo_i - 1] if lo_i > 0 else -1
+        above = total[hi_i + 1] if hi_i < bins - 1 else -1
+        if above >= below:
+            hi_i += 1
+        else:
+            lo_i -= 1
+    return edges, total, buy, poc, lo_i, hi_i
+
+
+def _ohlcv_arrays(data: pd.DataFrame):
+    return (data["high"].to_numpy(dtype=float), data["low"].to_numpy(dtype=float),
+            data["close"].to_numpy(dtype=float), np.nan_to_num(data["volume"].to_numpy(dtype=float)))
+
+
+def volume_profile(data: pd.DataFrame, bins: int = 24, value_area: float = 0.70) -> dict:
+    """Volume traded at each price level over `data`, split into estimated buying and selling.
+
+    Daily bars carry no tick data, so each bar's volume is spread evenly across its high-low range,
+    and the buying share is estimated from where the close sits in that range (close at the high = all buying).
+    """
+    edges, total, buy, poc, lo_i, hi_i = _profile(*_ohlcv_arrays(data), bins, value_area)
+    mid = (edges[:-1] + edges[1:]) / 2
+    levels = pd.DataFrame({"price": mid, "volume": total, "buy": buy, "sell": total - buy})
+    levels["buy_pct"] = 100 * levels["buy"] / levels["volume"].replace(0, np.nan)
+    return {
+        "levels": levels,
+        "poc": mid[poc],
+        "vah": edges[hi_i + 1],
+        "val": edges[lo_i],
+        "buy_pct": 100 * buy.sum() / total.sum(),
+    }
+
+
+def rolling_poc(data: pd.DataFrame, lookback: int = 120, bins: int = 24, value_area: float = 0.70) -> pd.DataFrame:
+    """POC, value area and buyer % of the last `lookback` bars up to and including each bar (no lookahead)."""
+    h, l, c, v = _ohlcv_arrays(data)
+    out = np.full((len(data), 4), np.nan)
+    for i in range(lookback, len(data) + 1):
+        s = slice(i - lookback, i)
+        if np.isnan(h[s]).any() or np.isnan(l[s]).any():
+            continue
+        edges, total, buy, poc, lo_i, hi_i = _profile(h[s], l[s], c[s], v[s], bins, value_area)
+        out[i - 1] = [(edges[poc] + edges[poc + 1]) / 2, edges[hi_i + 1], edges[lo_i], 100 * buy.sum() / total.sum()]
+    return pd.DataFrame(out, index=data.index, columns=["poc", "vah", "val", "buy_pct"])
