@@ -133,6 +133,10 @@ python research/index_study.py --universe smallcap100     # parameter grid searc
 
 Caveat: these are today's index members, so earlier years carry survivorship bias. Daily bars approximate the volume and market profiles; TradingView uses intraday data.
 
+## Strategy 2: DMI pullback
+
+A second strategy, kept apart in [`strategy_2_pullback/`](strategy_2_pullback/README.md): it buys stochastic dips inside a DMI uptrend and books the bounce at a 2 ATR target. Its win rate is higher (45–53% on unseen data against ~30%), but its returns are far lower, so strategy 1 stays the live one.
+
 ## Paper trading
 
 [`paper_trade.py`](paper_trade.py) runs the live config on fresh Yahoo data and keeps a saved book in `paper/` (`state.json`, `orders.csv`, `trades.csv`). The rules, fills and costs are the backtest's. Universe, capital and position limit are under `paper:` in the config.

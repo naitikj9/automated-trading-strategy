@@ -52,6 +52,15 @@ def dmi(data: pd.DataFrame, di_length: int = 14, adx_smoothing: int = 14) -> pd.
     return pd.DataFrame({"plus_di": plus_di, "minus_di": minus_di, "adx": adx})
 
 
+def atr(data: pd.DataFrame, length: int = 14) -> pd.Series:
+    """Average true range (TradingView `ta.atr`: rma of the true range)."""
+    prev_close = data["close"].shift(1)
+    true_range = pd.concat([data["high"] - data["low"], (data["high"] - prev_close).abs(),
+                            (data["low"] - prev_close).abs()], axis=1).max(axis=1)
+    true_range.iloc[0] = data["high"].iloc[0] - data["low"].iloc[0]
+    return rma(true_range, length)
+
+
 def stochastic(data: pd.DataFrame, k_length: int = 14, k_smooth: int = 3, d_smooth: int = 3) -> pd.DataFrame:
     low_min = data["low"].rolling(k_length).min()
     high_max = data["high"].rolling(k_length).max()

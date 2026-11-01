@@ -1,0 +1,16 @@
+# Strategy 2: DMI pullback (src/trading/strategies/pullback.py). Strategy 1's config/config.yaml is untouched.
+strategy:
+  name: "dmi_pullback"
+  params:
+    ema_fast: 20
+    ema_slow: 50
+    adx_min: 15            # trend in place (tuned on 2018-2023: 15 beat 20)
+    oversold: 40           # stochastic %K dipped below 40... (tuned: 40 beat 30)
+    dip_bars: 5            # ...within the last 5 bars
+    overbought: 80
+    atr_length: 14
+    target_atr: 2.0        # take profit at entry + 2 ATR
+    stop_atr: 2.0          # stop at entry - 2 ATR
+    exit_on_ema: true      # also exit on a close below EMA 50
+    exit_on_overbought: true  # also exit when %K goes above 80
+    max_bars: 20           # time stop

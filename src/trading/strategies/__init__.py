@@ -1,8 +1,9 @@
 from .base import Strategy
 from .dmi_macd import DMIMACDStrategy
+from .pullback import PullbackStrategy
 from .sma_crossover import SMACrossover
 
-REGISTRY = {cls.name: cls for cls in (DMIMACDStrategy, SMACrossover)}
+REGISTRY = {cls.name: cls for cls in (DMIMACDStrategy, PullbackStrategy, SMACrossover)}
 
 
 def get_strategy(name: str, **params) -> Strategy:
