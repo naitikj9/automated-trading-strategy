@@ -133,6 +133,21 @@ python research/index_study.py --universe smallcap100     # parameter grid searc
 
 Caveat: these are today's index members, so earlier years carry survivorship bias. Daily bars approximate the volume and market profiles; TradingView uses intraday data.
 
+### Five-year market study
+
+[`docs/five_year_study.md`](docs/five_year_study.md) covers Nov 2021 to Oct 2026: Nifty, 15 sector indices, market regimes, and every strategy 1 trade broken down by year, regime, VIX, breadth, entry rule, ADX and sector. In short:
+
+- 70% of the profit came from trades opened in 2023, and the best 10% of trades made all of it.
+- The strategy captures roughly half of a bull market and loses far less than buy & hold in chop.
+- A trailing exit and dropping the weakest entry rule were both tested; both made returns worse, so the rules stay as they are.
+
+```bash
+python research/five_year_study.py    # market, sectors and trade breakdown
+python research/weakness_tests.py     # the fixes that were tested
+```
+
+The findings also feed a Claude Code skill, [`.claude/skills/stock-broker`](.claude/skills/stock-broker/SKILL.md), which answers market and trade questions from this data (`/stock-broker`).
+
 ## Strategy 2: DMI pullback
 
 A second strategy, kept apart in [`strategy_2_pullback/`](strategy_2_pullback/README.md): it buys stochastic dips inside a DMI uptrend and books the bounce at a 2 ATR target. Its win rate is higher (45–53% on unseen data against ~30%), but its returns are far lower, so strategy 1 stays the live one.
