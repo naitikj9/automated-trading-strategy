@@ -43,7 +43,34 @@ Equal-weight portfolio of each index, daily bars, with costs. Settings were tune
 
 So a higher win rate here does not mean more money. Strategy 1 stays the main strategy. Strategy 2 is kept as a tested alternative and as a base for further work, such as a market filter or putting all the capital into the few open trades.
 
+## Improvement attempt: market filter and concentrated capital
+
+[`portfolio.py`](portfolio.py) adds two layers on top of either strategy, and [`improve.py`](improve.py) tests them:
+
+- **Market filter:** new entries only while at least X% of the index's stocks close above their EMA 50 (tried 40/50/60%).
+- **Slots:** capital in 5, 10 or 20 equal parts instead of one part per stock. When more stocks signal than there are free slots, the strongest ADX goes first.
+
+Chosen on 2018–2023: **10 slots, no market filter**. Every filter level lowered training Sharpe, although in the last year a 50% filter did cut the loss.
+
+| Index | Period | Strategy 2, all stocks | **Strategy 2, 10 slots** | Strategy 1, all stocks | Strategy 1, 10 slots |
+|---|---|---|---|---|---|
+| Smallcap 100 | test | 1.0%, DD −2.7% | **10.0%, DD −19.9%** | 9.7%, DD −7.3% | 36.8%, DD −23.5% |
+| | last year | −0.3% | **+0.2%** | +10.1% | +38.2% |
+| Midcap 100 | test | 0.7%, DD −2.2% | **4.0%, DD −20.2%** | 6.4%, DD −6.3% | 18.0%, DD −20.5% |
+| | last year | −1.2% | **−12.3%** | +0.4% | +4.7% |
+| Nifty 50 | test | 0.8%, DD −1.9% | **4.6%, DD −9.2%** | 3.3%, DD −7.5% | 7.2%, DD −16.4% |
+| | last year | −1.8% | **−8.8%** | −2.4% | +0.1% |
+
+CAGR, daily bars, with costs. Win rates do not change with slots: strategy 2 stays at 45–54%, strategy 1 at about 30%.
+
+**Verdict.**
+- Concentrating capital raises strategy 2's return about tenfold, from about 1% to 4–10% a year. It also raises drawdown to 9–20%.
+- Strategy 2 still loses to strategy 1 in every index, and it lost money in the last year in midcaps and Nifty 50.
+- The same 10-slot sizing lifts strategy 1 far more: 37% CAGR on smallcaps in 2024–26 and +38% in the last year. Drawdown also rises to −24%.
+- Caveat: these are today's index members, and holding only 10 stocks magnifies that survivorship bias. Treat the 10-slot numbers as an upper bound until paper trading confirms them.
+
 ```bash
 python strategy_2_pullback/study.py          # comparison table
 python strategy_2_pullback/study.py --grid   # re-tune on 2018-2023
+python strategy_2_pullback/improve.py        # slots x market filter
 ```

@@ -14,3 +14,8 @@ strategy:
     exit_on_ema: true      # also exit on a close below EMA 50
     exit_on_overbought: true  # also exit when %K goes above 80
     max_bars: 20           # time stop
+
+# Portfolio layer (portfolio.py), chosen on 2018-2023 by improve.py
+portfolio:
+  slots: 10           # capital in 10 equal parts, strongest ADX first when more stocks signal
+  min_breadth: 0.0    # market filter off: on 2018-2023 every breadth floor lowered Sharpe
