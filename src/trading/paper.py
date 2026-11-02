@@ -93,6 +93,19 @@ class PaperBook:
         return pd.read_csv(path) if path.exists() else pd.DataFrame(columns=TRADE_COLUMNS)
 
 
+def mark_price(closes: pd.Series, position: dict) -> tuple[float, str]:
+    """Latest close for valuing an open position, and the date it is from.
+
+    Yahoo sometimes drops its newest daily bar for a while. The last close left can then be from before the
+    entry, which would show a loss that never happened, so the entry price stands in until a newer bar arrives.
+    """
+    closes = closes.dropna()
+    entry_day = pd.Timestamp(position["entry_time"][:10])
+    if not len(closes) or closes.index[-1].tz_localize(None).normalize() < entry_day:
+        return position["entry_price"], position["entry_time"][:10]
+    return float(closes.iloc[-1]), f"{closes.index[-1]:%Y-%m-%d}"
+
+
 def daily_step(book: PaperBook, frames: dict[str, pd.DataFrame], exit_ema: int = 50) -> list[dict]:
     """Act on each symbol's latest completed daily bar (frames from DMIMACDStrategy.analyze).
 

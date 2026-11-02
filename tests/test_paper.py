@@ -6,7 +6,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 
-from trading.paper import PaperBook, daily_step, hourly_step  # noqa: E402
+from trading.paper import PaperBook, daily_step, hourly_step, mark_price  # noqa: E402
 
 
 def frame(closes, long_setup=False, adx=20.0):
@@ -93,3 +93,12 @@ def test_hourly_trigger_ignored_when_daily_trend_broken(tmp_path):
     h = hourly_history(today, [95, 100, 108, 112, 115, 118])
     late = pd.Timestamp(f"{today} 15:20", tz="Asia/Kolkata")
     assert hourly_step(book(tmp_path), {"A.NS": daily}, {"A.NS": h}, late) == []
+
+
+def test_mark_price_ignores_bars_older_than_the_entry():
+    pos = {"entry_price": 105.0, "entry_time": "2026-11-02"}
+    stale = pd.Series([100.0, 101.0, np.nan], index=pd.to_datetime(["2026-10-29", "2026-10-30", "2026-11-02"]))
+    assert mark_price(stale, pos) == (105.0, "2026-11-02")
+    fresh = pd.Series([101.0, 104.0, 108.0], index=pd.to_datetime(["2026-10-30", "2026-11-02", "2026-11-03"]))
+    assert mark_price(fresh, pos) == (108.0, "2026-11-03")
+    assert mark_price(pd.Series(dtype=float), pos) == (105.0, "2026-11-02")

@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "research"))
 
 from trading.data.loader import load_yfinance, load_yfinance_hourly  # noqa: E402
-from trading.paper import PaperBook, daily_step, hourly_step  # noqa: E402
+from trading.paper import PaperBook, daily_step, hourly_step, mark_price  # noqa: E402
 from trading.strategies import get_strategy  # noqa: E402
 
 IST = "Asia/Kolkata"
@@ -112,11 +112,12 @@ def report(book: PaperBook) -> None:
     rows, prices = [], {}
     for s, p in book.positions.items():
         try:
-            prices[s] = float(load_yfinance(s, (pd.Timestamp.now() - pd.Timedelta(days=10)).strftime("%Y-%m-%d"))["close"].iloc[-1])
+            closes = load_yfinance(s, (pd.Timestamp.now() - pd.Timedelta(days=10)).strftime("%Y-%m-%d"))["close"]
         except Exception:
-            prices[s] = p["entry_price"]
+            closes = pd.Series(dtype=float)
+        prices[s], as_of = mark_price(closes, p)
         rows.append({"symbol": tradingview(s), "since": p["entry_time"][:16], "qty": p["qty"],
-                     "entry": round(p["entry_price"], 2), "last": round(prices[s], 2),
+                     "entry": round(p["entry_price"], 2), "last": round(prices[s], 2), "as_of": as_of,
                      "return_%": round(100 * (prices[s] / p["entry_price"] - 1), 2), "why": p["reason"]})
     equity = book.equity(prices)
     print(f"Equity Rs {equity:,.0f} ({equity / book.capital - 1:+.2%} on Rs {book.capital:,.0f}), cash Rs {book.cash:,.0f}\n")
