@@ -158,7 +158,7 @@ schtasks /create /tn "PaperTrade daily" /tr "C:\path\to\repo\run_paper.bat daily
 schtasks /create /tn "PaperTrade hourly" /tr "C:\path\to\repo\run_paper.bat hourly" /sc weekly /d MON,TUE,WED,THU,FRI /st 10:20 /ri 60 /du 05:00
 ```
 
-Limits: if the PC is off on a day, that day's daily signals are missed (the next run acts only on the latest bar). Yahoo prices arrive with a short delay. With `max_positions: null`, capital is split across every stock in the universe, as in the backtests, so each trade is small. Set `max_positions` to 10–20 for bigger trades, but that sizing has not been backtested.
+Limits: if the PC is off on a day, that day's daily signals are missed (the next run acts only on the latest bar). Yahoo prices arrive with a short delay. `max_positions: 10` puts capital in 10 equal slots (about Rs 1 lakh each), strongest ADX first. That sizing was backtested in [`strategy_2_pullback/improve.py`](strategy_2_pullback/README.md): about 37% CAGR on smallcaps in 2024–26, with drawdown up to −24%. Set it to `null` to split capital across every stock instead, as in the plain backtests.
 
 ## Daily scanner
 

@@ -58,5 +58,5 @@ hourly:
 paper:
   universe: smallcap100   # watchlist, or an NSE index: nifty50, midcap100, smallcap100
   capital: 1000000
-  max_positions: null     # null = capital split equally across every stock, as in the backtests
+  max_positions: 10       # 10 slots, strongest ADX first (strategy_2_pullback/improve.py); null = one slot per stock
   folder: paper
