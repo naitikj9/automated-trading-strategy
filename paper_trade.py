@@ -98,9 +98,14 @@ def main():
         hourly = {}
         for s in daily:
             try:
-                hourly[s] = load_yfinance_hourly(s, days=60)
+                bars = load_yfinance_hourly(s, days=60)
             except Exception as exc:
                 print(f"skip {s}: {exc}")
+                continue
+            if len(bars) < 2:  # Yahoo sometimes returns nothing; one empty frame must not stop the run
+                print(f"skip {s}: no hourly data")
+                continue
+            hourly[s] = bars
         orders = hourly_step(book, daily, hourly, now, tuple(cfg["hourly"]["triggers"]), params["exit_ema"])
     book.save()
     print(f"{now:%Y-%m-%d %H:%M} IST, {args.mode} check of {len(daily)} stocks")
